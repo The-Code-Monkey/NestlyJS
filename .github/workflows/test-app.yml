@@ -22,7 +22,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Build Server
-        run: yarn workspace @nestly/server build
+        run: yarn workspace @nestlyjs/server build
 
       - name: Start Dev Server
         run: |
