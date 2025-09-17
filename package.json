@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "devDependencies": {
-    "@changesets/cli": "3.0.0"
+    "@changesets/cli": "2.29.7"
   },
   "scripts": {
     "changeset": "changeset",
