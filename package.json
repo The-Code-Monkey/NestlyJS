@@ -1,6 +1,11 @@
 {
   "name": "nestlyjs",
   "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "git+https://github.com/The-Code-Monkey/NestlyJS.git" },
+  "bugs": { "url": "https://github.com/The-Code-Monkey/NestlyJS/issues" },
+  "homepage": "https://github.com/The-Code-Monkey/NestlyJS#readme",
   "workspaces": [
     "packages/*"
   ],
