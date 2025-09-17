@@ -1,0 +1,14 @@
+{
+  "name": "nestlyjs",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@changesets/cli": "3.0.0"
+  },
+  "scripts": {
+    "changeset": "changeset",
+    "build": "yarn workspaces foreach -pt run build"
+  }
+}
