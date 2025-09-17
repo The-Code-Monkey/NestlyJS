@@ -1,5 +1,5 @@
 process.on("message", async (msg) => {
-  const { url, method, headers } = msg;
+  const { url, method, headers } = msg ?? {};
 
   // Example API response
   const response = {
