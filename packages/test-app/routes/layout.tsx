@@ -1,6 +1,6 @@
 import React from "react";
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout() {
   return (
     <html>
       <head>
@@ -10,7 +10,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <header>
           <h1>Test App Header</h1>
         </header>
-        <main>{children}</main>
+        <main></main>
       </body>
     </html>
   );
