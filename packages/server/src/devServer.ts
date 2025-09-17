@@ -1,20 +1,20 @@
 import cluster from "cluster";
+import path from "path";
 
-const numWorkers = 2; // 1 SSR + 1 API
+export function start({ port = 3000 }: { port?: number }) {
+  if (cluster.isMaster) {
+    console.log(`Dev Master ${process.pid} is running`);
 
-if (cluster.isMaster) {
-  console.log(`Dev Master ${process.pid} is running`);
+    cluster.fork({ WORKER_TYPE: "ssr", PORT: port });
+    cluster.fork({ WORKER_TYPE: "api", PORT: port });
 
-  cluster.fork({ WORKER_TYPE: "ssr" });
-  cluster.fork({ WORKER_TYPE: "api" });
-
-  cluster.on("exit", (worker) => {
-    console.log(`Worker ${worker.process.pid} died. Restarting...`);
-    const type = worker.process.env.WORKER_TYPE;
-    cluster.fork({ WORKER_TYPE: type });
-  });
-} else {
-  const type = process.env.WORKER_TYPE;
-  if (type === "api") require("./devAPIWorker");
-  else require("./devSSRWorker");
+    cluster.on("exit", (worker) => {
+      console.log(`Worker ${worker.process.pid} died. Restarting...`);
+      cluster.fork({ WORKER_TYPE: worker.process.env.WORKER_TYPE, PORT: port });
+    });
+  } else {
+    const type = process.env.WORKER_TYPE;
+    if (type === "api") require("./devAPIWorker");
+    else require("./devSSRWorker");
+  }
 }
