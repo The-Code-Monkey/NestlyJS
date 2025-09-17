@@ -9,5 +9,5 @@ process.on("message", async (msg) => {
     headers
   };
 
-  process.send({ body: response, status: 200 });
+  process.send?.({ body: response, status: 200 });
 });
