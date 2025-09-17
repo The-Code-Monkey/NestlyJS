@@ -1,0 +1,37 @@
+name: Test Test-App
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Start Dev Server
+        run: |
+          # Start nestly dev in background
+          PORT=4000 yarn workspace test-app dev &
+          # Wait for server to be ready
+          sleep 5
+
+      - name: Run Route Tests
+        run: yarn workspace test-app test:routes
+
+      - name: Kill Dev Server
+        run: |
+          pkill -f "nestly dev" || true
+          
