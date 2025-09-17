@@ -4,7 +4,8 @@ export function start({ port = 3000 }: { port?: number }) {
   if (cluster.isMaster) {
     console.log(`Dev Master ${process.pid} is running`);
 
-    const workers: Record<string, cluster.Worker> = {};
+    // Map worker ID to type
+    const workerTypes: Record<number, "ssr" | "api"> = {};
 
     const forkWorker = (type: "ssr" | "api") => {
       const worker = cluster.fork({
@@ -12,20 +13,22 @@ export function start({ port = 3000 }: { port?: number }) {
         WORKER_TYPE: type,
         PORT: port.toString(),
       });
-      workers[worker.id] = worker;
+      workerTypes[worker.id] = type;
       return worker;
     };
 
-    // Fork two workers
+    // Fork workers
     forkWorker("ssr");
     forkWorker("api");
 
     cluster.on("exit", (worker) => {
       console.log(`Worker ${worker.process?.pid} died. Restarting...`);
 
-      // Lookup the type by id, fallback to "ssr"
-      const type = Object.entries(workers).find(([, w]) => w.id === worker.id)?.[1].process?.env.WORKER_TYPE || "ssr";
+      const type = workerTypes[worker.id] || "ssr"; // get type from our map
       forkWorker(type);
+
+      // Remove old worker from map
+      delete workerTypes[worker.id];
     });
   } else {
     const type = process.env.WORKER_TYPE;
