@@ -5,5 +5,5 @@ process.on("message", async (msg) => {
   const { renderPage } = require("./renderer");
   const html = await renderPage(url);
 
-  process.send({ html });
+  process.send?.({ html });
 });
