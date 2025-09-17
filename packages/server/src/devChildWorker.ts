@@ -15,9 +15,9 @@ process.on("message", async (msg) => {
     // Render React component to HTML
     const html = ReactDOMServer.renderToString(React.createElement(Page, { url }));
 
-    process.send({ html });
+    process.send?.({ html });
   } catch (err) {
     console.error("SSR Child error:", err);
-    process.send({ html: "<h1>Error rendering page</h1>" });
+    process.send?.({ html: "<h1>Error rendering page</h1>" });
   }
 });
