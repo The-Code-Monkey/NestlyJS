@@ -5,12 +5,12 @@
   "main": "routes/index.tsx",
   "scripts": {
     "dev": "nestly dev",
-    "build": "tsc -b",
-    "start": "nestly start"
+    "start": "nestly start",
+    "test:routes": "ts-node test/routes.test.ts"
   },
   "dependencies": {
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
+    "react": "18.0.0",
+    "react-dom": "18.0.0",
     "@nestlyjs/server": "*"
   }
 }
