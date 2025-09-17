@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Build Server
+        run: yarn workspace nestly build
+
       - name: Start Dev Server
         run: |
           # Start nestly dev in background
