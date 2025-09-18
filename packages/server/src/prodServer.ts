@@ -1,6 +1,15 @@
 import cluster from "cluster";
 import os from "os";
 
+/**
+ * Start a clustered production server: master forks and supervises worker processes, workers load the appropriate entry module.
+ *
+ * When run in the master process, forks a pool of worker processes (minimum 4) and divides them into API workers (~1/4) and SSR workers (~3/4). The master tracks each worker's role and restarts a replacement of the same role if a worker exits. When run in a worker process, loads either the API or SSR worker module based on the WORKER_TYPE environment variable.
+ *
+ * Side effects: forks child processes, sets WORKER_TYPE and PORT in worker environments, and writes lifecycle logs to stdout.
+ *
+ * @param port - TCP port forwarded to worker processes via the PORT environment variable (defaults to 3000)
+ */
 export function start({ port = 3000 }: { port?: number }) {
   if (cluster.isMaster) {
     const numCPUs = os.cpus().length;

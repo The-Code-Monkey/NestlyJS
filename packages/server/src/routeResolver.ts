@@ -8,8 +8,16 @@ export interface RouteFiles {
 }
 
 /**
- * Resolves the page.tsx and api.ts files for a given URL path.
- * Root path "/" resolves directly to routes folder.
+ * Return the filesystem locations for the route directory, its page component, and its API module for a given URL path.
+ *
+ * The `urlPath` is expected to be an absolute URL path (leading `/`). A root path (`"/"`) maps to the `routes` folder itself;
+ * other paths map to `routes/<path-without-leading-slash>`.
+ *
+ * @param urlPath - The request URL path (e.g., `/`, `/users`, `/posts/123`)
+ * @returns An object with:
+ *  - `routeDir`: the computed route directory on disk,
+ *  - `pageFile`: the resolved path to `page.tsx` inside that directory,
+ *  - `apiFile`: the resolved path to `api.ts` inside that directory.
  */
 export function getRouteFiles(urlPath: string): RouteFiles {
   const routeDir = path.join(process.cwd(), "routes", urlPath === "/" ? "" : urlPath.slice(1));
@@ -21,7 +29,13 @@ export function getRouteFiles(urlPath: string): RouteFiles {
 }
 
 /**
- * Determines if a GET request should be handled by page.tsx
+ * Returns whether a GET request for the given URL path should be handled by a route's `page.tsx`.
+ *
+ * This checks the filesystem for a `page.tsx` file under the route directory derived from `urlPath`
+ * (where `"/"` maps to the `routes` root). If `page.tsx` exists, GET requests should be handled by it.
+ *
+ * @param urlPath - The request URL path (e.g., `/`, `/users`, `/posts/123`)
+ * @returns `true` if a `page.tsx` exists for the route and therefore GET should be handled by the page; otherwise `false`
  */
 export function hasPageForGET(urlPath: string): boolean {
   const { pageFile } = getRouteFiles(urlPath);
@@ -29,7 +43,16 @@ export function hasPageForGET(urlPath: string): boolean {
 }
 
 /**
- * Determines if an API route exists for the given URL path and method
+ * Returns the API handler function for a given URL path and HTTP method, or `null` if none applies.
+ *
+ * This checks for a route's `api.ts` file and, unless the request is a GET with an existing `page.tsx`
+ * (which takes precedence), returns the exported function matching the uppercased HTTP method
+ * (e.g., `GET`, `POST`) from the `api.ts` module.
+ *
+ * @param urlPath - The request URL path (e.g., "/", "/users")
+ * @param method - The HTTP method name (case-insensitive; will be uppercased)
+ * @returns The handler function exported from the route's `api.ts` for the given method, or `null` if not found.
+ * @throws If requiring the route's `api.ts` module fails, the underlying require error will propagate.
  */
 export function getAPIMethod(urlPath: string, method: string): Function | null {
   const { pageFile, apiFile } = getRouteFiles(urlPath);
