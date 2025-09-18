@@ -12,8 +12,13 @@ console.log(`[CHILD ${process.pid}] Booting SSR child worker`);
 // Detect "use client"
 function isClientComponent(filePath: string) {
   try {
-    const firstLine = fs.readFileSync(filePath, "utf8").split("\n")[0].trim();
-    return firstLine === '"use client"' || firstLine === "'use client'";
+    const buf = fs.readFileSync(filePath, "utf8");
+    const firstStmt = buf
+      .split(/\r?\n/)
+      .slice(0, 10)
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith("//") && !l.startsWith("/*"))[0];
+    return /^['"]use client['"]\s*;?$/.test(firstStmt ?? "");
   } catch {
     return false;
   }
