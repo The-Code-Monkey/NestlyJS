@@ -7,7 +7,7 @@
     "nestly": "dist/bin/nestly.js"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc && chmod +x ./dist/bin/nestly.js"
   },
   "devDependencies": {
     "@types/node": "24.5.2",
