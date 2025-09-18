@@ -9,105 +9,146 @@ const activeChildren: Map<string, ChildProcess> = new Map();
 export default function createSSRWorker(server: http.Server) {
   console.log(`[SSR WORKER ${process.pid}] Initializing`);
 
-  const startChildForRoute = (urlPath: string): ChildProcess | null => {
-    const { pageFile } = getRouteFiles(urlPath);
+  const childPath = path.resolve(__dirname, "devChildWorker.js");
 
-    if (!fs.existsSync(pageFile)) {
-      console.log(
-        `[SSR WORKER ${process.pid}] Page file does not exist: ${pageFile}`
-      );
-      return null;
+  // ----------------------------
+  // PERSISTENT CHILD SETUP
+  // ----------------------------
+  const persistentChild: ChildProcess = fork(childPath, {
+    execArgv: ["-r", "ts-node/register"],
+    env: {
+      ...process.env,
+      TS_NODE_PROJECT: path.resolve(__dirname, "..", "tsconfig.devServer.json"),
+    },
+  });
+
+  let persistentReady = false;
+
+  // <--- QUEUE REQUESTS BEFORE PERSISTENT CHILD READY
+  const requestQueue: {
+    req: http.IncomingMessage;
+    res: http.ServerResponse;
+    url: string;
+  }[] = [];
+
+  persistentChild.on("message", (msg: any) => {
+    if (msg.type === "ready") {
+      console.log(`[SSR WORKER ${process.pid}] Persistent child READY`);
+      persistentReady = true;
+
+      // <--- FLUSH QUEUED REQUESTS
+      requestQueue.forEach(({ req, res, url }) => handleRequest(req, res, url));
+      requestQueue.length = 0;
     }
 
-    if (activeChildren.has(urlPath)) {
-      const oldChild = activeChildren.get(urlPath)!;
-      oldChild.kill();
-      activeChildren.delete(urlPath);
-    }
-
-    const childPath = path.resolve(__dirname, "devChildWorker.js");
-    const child = fork(childPath, {
-      execArgv: ["-r", "ts-node/register"],
-      env: {
-        ...process.env,
-        TS_NODE_PROJECT: path.resolve(
-          __dirname,
-          "..",
-          "tsconfig.devServer.json"
-        ),
-      },
-    });
-
-    activeChildren.set(urlPath, child);
-    console.log(
-      `[SSR WORKER ${process.pid}] Forked child PID: ${child.pid} for route ${urlPath}`
-    );
-
-    // Hot reload
-    fs.watch(pageFile, (event) => {
-      if (event === "change") {
+    // Handle render messages from persistent child
+    if (msg.type === "render" && msg.url) {
+      const queued = requestQueue.find((r) => r.url === msg.url);
+      if (queued) {
+        queued.res.writeHead(200, { "Content-Type": "text/html" });
+        queued.res.end(msg.html);
         console.log(
-          `[SSR WORKER ${process.pid}] Detected change in ${pageFile}, restarting child`
+          `[SSR WORKER ${process.pid}] Responded (queued) for ${msg.url}`
         );
-        startChildForRoute(urlPath);
+        requestQueue.splice(requestQueue.indexOf(queued), 1);
       }
-    });
-
-    return child;
-  };
-
-  server.on("connection", (socket) => {
-    console.log(`[SSR WORKER ${process.pid}] Connection established`);
+    }
   });
 
-  server.on("close", () => {
-    console.log(`[SSR WORKER ${process.pid}] Server closed`);
-  });
-
-  server.on("request", async (req, res) => {
+  // ----------------------------
+  // REQUEST HANDLING
+  // ----------------------------
+  server.on("request", (req, res) => {
     const urlPath = req.url || "/";
+
+    if (!persistentReady) {
+      console.log(
+        `[SSR WORKER ${process.pid}] Persistent child not ready, queueing request for ${urlPath}`
+      );
+      requestQueue.push({ req, res, url: urlPath });
+      return;
+    }
+
+    handleRequest(req, res, urlPath);
+  });
+
+  // ----------------------------
+  // SINGLE REQUEST HANDLER
+  // ----------------------------
+  function handleRequest(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    urlPath: string
+  ) {
     const method = req.method?.toUpperCase() || "GET";
 
     console.log(`[SSR WORKER ${process.pid}] Request: ${method} ${urlPath}`);
 
     if (method !== "GET" || !hasPageForGET(urlPath)) {
       res.writeHead(404);
-      res.end("Page Not Found or handled by API worker");
+      res.end("Page not found or handled by API worker");
       return;
     }
 
-    let child = activeChildren.get(urlPath);
-    if (!child) {
-      child = startChildForRoute(urlPath)!;
+    const { pageFile } = getRouteFiles(urlPath);
 
-      // Wait for child ready
-      await new Promise<void>((resolve) => {
-        const onReady = (msg: any) => {
-          if (msg?.type === "ready") {
-            console.log(
-              `[SSR WORKER ${process.pid}] Child READY for ${urlPath}`
-            );
-            child!.off("message", onReady);
-            resolve();
-          }
-        };
-        child!.on("message", onReady);
+    // ----------------------------
+    // TEMP CHILD FOR HOT RELOAD
+    // ----------------------------
+    if (!activeChildren.has(urlPath)) {
+      console.log(
+        `[SSR WORKER ${process.pid}] No child for ${urlPath}, forking temp child`
+      );
+
+      const tempChild = fork(childPath, {
+        execArgv: ["-r", "ts-node/register"],
+        env: {
+          ...process.env,
+          TS_NODE_PROJECT: path.resolve(
+            __dirname,
+            "..",
+            "tsconfig.devServer.json"
+          ),
+        },
       });
+      activeChildren.set(urlPath, tempChild);
+
+      fs.watch(pageFile, (event) => {
+        if (event === "change") {
+          console.log(
+            `[SSR WORKER ${process.pid}] Detected change in ${pageFile}, restarting child`
+          );
+          tempChild.kill();
+          activeChildren.delete(urlPath);
+        }
+      });
+
+      tempChild.on("message", (msg: any) => {
+        if (msg.type === "render") {
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(msg.html);
+          console.log(`[SSR WORKER ${process.pid}] Responded for ${urlPath}`);
+        }
+      });
+
+      tempChild.send({ file: pageFile, url: urlPath });
+      return;
     }
 
-    // Send render request
-    child.send({ file: getRouteFiles(urlPath).pageFile, url: req.url });
+    // ----------------------------
+    // USE PERSISTENT CHILD
+    // ----------------------------
+    persistentChild.send({ file: pageFile, url: urlPath });
 
-    // Listen for render response
     const onRender = (msg: any) => {
-      if (msg?.type === "render") {
+      if (msg.type === "render" && msg.url === urlPath) {
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(msg.html);
         console.log(`[SSR WORKER ${process.pid}] Responded for ${urlPath}`);
-        child!.off("message", onRender);
+        persistentChild.off("message", onRender);
       }
     };
 
-    child.on("message", onRender);
-  });
+    persistentChild.on("message", onRender);
+  }
 }
