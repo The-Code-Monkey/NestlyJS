@@ -24,8 +24,17 @@ process.on(
     try {
       console.log(`[CHILD ${process.pid}] Executing API: ${method} ${url}`);
       const apiModule = await import(file);
-      const handler = apiModule.default || apiModule;
+      const handler = apiModule?.[method];
+      if (!handler) {
+        throw new Error(`Method ${method} not found in ${file}`);
+      }
+      if (typeof handler !== "function") {
+        throw new Error(`Method ${method} in ${file} is not a function`);
+      }
       const result = await handler({ method, url, headers, body });
+      if (!result) {
+        throw new Error(`Method ${method} in ${file} did not return a result`);
+      }
       process.send?.({
         type: "apiResponse",
         status: result.status || 200,
@@ -40,7 +49,9 @@ process.on(
       process.send?.({
         type: "apiResponse",
         status: 500,
-        body: { error: "Internal Server Error" },
+        body: {
+          error: `[CHILD ${process.pid}] Error in API: ${method} ${url} ${err}`,
+        },
       });
     }
   }

@@ -1,89 +1,67 @@
-import cluster, { Worker } from "cluster";
-import net from "net";
+// devServer.ts
+import cluster from "cluster";
+import http from "http";
+import os from "os";
+import { devSSRHandler } from "./devSSRWorker";
+import { devAPIHandler } from "./devAPIWorker";
+import { hasPageForGET, getAPIMethod } from "./routeResolver";
 
-export function start({ port = 3000 }: { port?: number }) {
+export function start({
+  port = 3000,
+  totalWorkers,
+}: { port?: number; totalWorkers?: number } = {}) {
+  const numWorkers = totalWorkers || os.cpus().length;
+
   if (cluster.isPrimary) {
     console.log(`[MASTER] Dev Master ${process.pid} running`);
 
-    const workerTypes: Record<number, "ssr" | "api"> = {};
-    let ssrWorker: Worker;
-    let apiWorker: Worker;
-
-    const forkWorker = (type: "ssr" | "api") => {
-      console.log(`[MASTER] Forking ${type} worker`);
-      const worker = cluster.fork({
-        ...process.env,
-        WORKER_TYPE: type,
-        PORT: port.toString(),
-      });
-      workerTypes[worker.id] = type;
-      worker.on("online", () =>
-        console.log(`[MASTER] Worker ${worker.process.pid} (${type}) online`)
-      );
-      return worker;
-    };
-
-    ssrWorker = forkWorker("ssr");
-    apiWorker = forkWorker("api");
-
-    // ----------------------------
-    // MASTER NET SERVER SIMPLIFIED
-    // ----------------------------
-    const server = net.createServer((socket) => {
-      // Forward socket immediately to SSR worker
-      ssrWorker.send("socket", socket);
-    });
-
-    server.listen(port, () =>
-      console.log(`[MASTER] Listening on http://localhost:${port}`)
-    );
+    // Fork workers
+    for (let i = 0; i < numWorkers; i++) {
+      cluster.fork({ PORT: port.toString() });
+    }
 
     cluster.on("exit", (worker) => {
       console.log(`[MASTER] Worker ${worker.process?.pid} died. Restarting...`);
-      const type = workerTypes[worker.id] || "ssr";
-      const newWorker = forkWorker(type);
-
-      if (type === "ssr" && ssrWorker.id === worker.id) ssrWorker = newWorker;
-      if (type === "api" && apiWorker.id === worker.id) apiWorker = newWorker;
-
-      delete workerTypes[worker.id];
+      cluster.fork({ PORT: port.toString() });
     });
   } else {
-    const type = process.env.WORKER_TYPE;
-    console.log(`[WORKER ${process.pid}] Starting as ${type}`);
+    const server = http.createServer(async (req, res) => {
+      const urlPath = req.url || "/";
+      const method = (req.method || "GET").toUpperCase();
 
-    // ----------------------------
-    // WORKER HTTP SERVER
-    // ----------------------------
-    const server = require("http").createServer();
+      try {
+        // 1️⃣ GET request with page.tsx → SSR
+        if (method === "GET" && hasPageForGET(urlPath)) {
+          await devSSRHandler(req, res);
+          return;
+        }
 
-    if (type === "api") {
-      require("./devAPIWorker").default(server);
-    } else {
-      require("./devSSRWorker").default(server);
-    }
+        // 2️⃣ API check for any method
+        const apiFunc = getAPIMethod(urlPath, method);
+        if (apiFunc) {
+          await devAPIHandler(req, res);
+          return;
+        }
 
-    // ----------------------------
-    // SOCKET HANDLING
-    // ----------------------------
-    process.on("message", (msg, socket: any) => {
-      if (msg === "socket" && socket) {
-        console.log(
-          `[WORKER ${process.pid}] Received socket, attaching HTTP server`
-        );
-
-        // Ensure HTTP parser reads and attach to server
-        socket.resume();
-        server.emit("connection", socket);
-        console.log(`[WORKER ${process.pid}] Connection attached`);
+        // 3️⃣ Not found
+        if (method === "GET") {
+          res.writeHead(404);
+          res.end("Page not found or handled by API worker");
+        } else {
+          res.writeHead(404);
+          res.end("API route not found");
+        }
+      } catch (err) {
+        console.error(`[WORKER ${process.pid}] Error handling request:`, err);
+        res.writeHead(500);
+        res.end("Internal server error");
       }
     });
 
-    // ----------------------------
-    // LISTENING
-    // ----------------------------
-    server.listen(0, () =>
-      console.log(`[WORKER ${process.pid}] HTTP server listening`)
-    ); // use ephemeral port, master forwards sockets
+    server.listen(port, () => {
+      console.log(
+        `[WORKER ${process.pid}] Listening on http://localhost:${port}`
+      );
+    });
   }
 }
