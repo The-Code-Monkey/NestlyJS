@@ -21,6 +21,7 @@
   },
   "scripts": {
     "changeset": "changeset",
-    "build": "yarn workspaces foreach -pt run build"
-  }
+    "build": "yarn workspaces run build"
+  },
+  "packageManager": "yarn@1.22.22"
 }

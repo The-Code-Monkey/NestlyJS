@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nestly dev",
     "start": "nestly start",
-    "test:routes": "ts-node test/routes.test.ts"
+    "test:routes": "ts-node test/routes.test.ts",
+    "build": "echo 'Building...'"
   },
   "dependencies": {
     "@nestlyjs/server": "*",
