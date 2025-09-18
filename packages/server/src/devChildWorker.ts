@@ -1,25 +1,66 @@
 import React from "react";
-import { renderToString } from "react-dom/server";
+import { renderToStaticMarkup } from "react-dom/server";
 import path from "path";
+import fs from "fs";
 
 console.log(`[CHILD ${process.pid}] Booting SSR child worker`);
 
-// create a function that from a url part array will find all the corresponding layout components in reverse order to be able to render them within each other.
+// ----------------------------
+// Helpers
+// ----------------------------
+
+// Detect "use client"
+function isClientComponent(filePath: string) {
+  try {
+    const firstLine = fs.readFileSync(filePath, "utf8").split("\n")[0].trim();
+    return firstLine === '"use client"' || firstLine === "'use client'";
+  } catch {
+    return false;
+  }
+}
+
+// Render either SSR or static+hydrate
+function renderComponent(filePath: string, props: any = {}) {
+  const importPath =
+    "/" + path.relative(process.cwd(), filePath).replace(/\\/g, "/");
+
+  if (isClientComponent(filePath)) {
+    const Comp = require(filePath).default;
+    const staticHTML = renderToStaticMarkup(React.createElement(Comp, props));
+
+    return `
+      <div>${staticHTML}</div>
+      <script type="module">
+        import React from "react";
+        import { hydrateRoot } from "react-dom/client";
+        import Comp from "${importPath}";
+        const scriptEl = document.currentScript;
+        const el = scriptEl?.previousElementSibling;
+        if (el) {
+          hydrateRoot(el, React.createElement(Comp, ${JSON.stringify(props)}));
+        }
+        // Clean up script tag after running
+        scriptEl?.remove();
+      </script>
+    `;
+  } else {
+    const Comp = require(filePath).default;
+    return renderToStaticMarkup(React.createElement(Comp, props));
+  }
+}
+
+// Find all layouts for a given url path
 const findLayoutComponents = async (urlPath: string) => {
-  const layoutComponents = [];
+  const layoutComponents: string[] = [];
   let pathParts = urlPath.split("/").filter(Boolean);
   const routesIndex = pathParts.findIndex((part) => part === "routes");
   pathParts = pathParts.slice(routesIndex, pathParts.length);
   for (let i = pathParts.length - 1; i >= 0; i--) {
-    const layoutComponent = (
-      await import(
-        path.resolve(
-          process.cwd(),
-          `${pathParts.slice(0, i + 1).join("/")}/layout.tsx`
-        )
-      )
-    ).default;
-    layoutComponents.push(layoutComponent);
+    const layoutPath = path.resolve(
+      process.cwd(),
+      `${pathParts.slice(0, i + 1).join("/")}/layout.tsx`
+    );
+    layoutComponents.push(layoutPath);
   }
   return layoutComponents;
 };
@@ -29,77 +70,49 @@ const findLayoutComponents = async (urlPath: string) => {
 // ----------------------------
 process.on("message", async ({ file, url }: { file: string; url: string }) => {
   try {
-    const Page = (await import(file)).default;
-
-    // ----------------------------
-    // Wrap in timeout (5s)
-    // ----------------------------
-    const renderedPage = await Promise.race([
-      Promise.resolve(React.createElement(Page)),
-      new Promise<string>((_, reject) =>
-        setTimeout(() => reject("Render timeout"), 5000)
-      ),
-    ]);
+    // Render page (server or client)
+    let renderedPage = renderComponent(file, {});
 
     const urlPathParts = url.split("/").filter(Boolean);
 
+    // Handle root layout
     if (urlPathParts.length === 0) {
-      const Layout = (await import(file.replace("page.tsx", "layout.tsx")))
-        .default;
-      const renderedLayout = await Promise.race([
-        Promise.resolve(
-          React.createElement(Layout, { children: renderedPage })
-        ),
-        new Promise<string>((_, reject) =>
-          setTimeout(() => reject("Render timeout"), 5000)
-        ),
-      ]);
+      const layoutPath = file.replace("page.tsx", "layout.tsx");
+      renderedPage = renderComponent(layoutPath, { children: renderedPage });
 
       process.send?.({
         type: "render",
-        html: renderToString(renderedLayout),
+        html: renderedPage,
         url,
       });
       console.log(`[CHILD ${process.pid}] Rendered page for ${url}`);
       return;
-    } else if (urlPathParts.length >= 1) {
-      const layoutComponents = await findLayoutComponents(
+    }
+
+    // Handle nested layouts
+    if (urlPathParts.length >= 1) {
+      const layoutPaths = await findLayoutComponents(
         file.replace("page.tsx", "")
       );
 
-      console.log(layoutComponents[0]);
-      // for each layout make sure it is within the previous layout using a for loop after the for loop then we can return the rendered layout with the page within it.
-      let renderedLayout = await Promise.race([
-        Promise.resolve(
-          React.createElement(layoutComponents[0], {
-            children: renderedPage,
-          })
-        ),
-        new Promise<string>((_, reject) =>
-          setTimeout(() => reject("Render timeout"), 5000)
-        ),
-      ]);
-
-      for (let i = 1; i < layoutComponents.length; i++) {
-        const Layout = layoutComponents[i];
-        renderedLayout = (await Promise.race([
-          Promise.resolve(
-            React.createElement(Layout, { children: renderedLayout })
-          ),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject("Render timeout"), 5000)
-          ),
-        ])) as any;
+      let renderedLayout = renderedPage;
+      for (const layoutPath of layoutPaths) {
+        renderedLayout = renderComponent(layoutPath, {
+          children: renderedLayout,
+        });
       }
+
       process.send?.({
         type: "render",
-        html: renderToString(renderedLayout),
+        html: renderedLayout,
         url,
       });
       console.log(`[CHILD ${process.pid}] Rendered page for ${url}`);
+      return;
     }
 
-    process.send?.({ type: "render", html: renderToString(renderedPage), url });
+    // Fallback: send just the page
+    process.send?.({ type: "render", html: renderedPage, url });
     console.log(`[CHILD ${process.pid}] Rendered page for ${url}`);
   } catch (err) {
     console.error(`[CHILD ${process.pid}] Error rendering page:`, err);
