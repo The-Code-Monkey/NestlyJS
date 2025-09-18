@@ -1,12 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2020",
+    "jsx": "react-jsx",
     "module": "CommonJS",
-    "outDir": "bin",
+    "outDir": "./dist",
     "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/routes"]
 }

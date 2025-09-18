@@ -9,8 +9,8 @@
     "test:routes": "ts-node test/routes.test.ts"
   },
   "dependencies": {
+    "@nestlyjs/server": "*",
     "react": "18.0.0",
-    "react-dom": "18.0.0",
-    "@nestlyjs/server": "*"
+    "react-dom": "18.0.0"
   }
 }
