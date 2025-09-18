@@ -4,12 +4,13 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "nestly": "bin/nestly.js"
+    "nestly": "dist/bin/nestly.js"
   },
   "scripts": {
     "build": "tsc"
   },
   "devDependencies": {
+    "@types/node": "24.5.2",
     "@types/react": "19.1.13",
     "@types/react-dom": "19.1.9"
   },

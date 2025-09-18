@@ -8,7 +8,7 @@ const server = http.createServer((req, res) => {
 
   child.on("message", (data) => {
     res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(data.html);
+    res.end(data);
   });
 
   child.on("error", (err) => {
@@ -19,4 +19,6 @@ const server = http.createServer((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`SSR Worker ${process.pid} listening on port ${PORT}`));
+server.listen(PORT, () =>
+  console.log(`SSR Worker ${process.pid} listening on port ${PORT}`)
+);

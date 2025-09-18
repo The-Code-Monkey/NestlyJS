@@ -22,7 +22,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Build Server
-        run: yarn workspace @nestlyjs/server build
+        run: yarn workspace @nestlyjs/server build && yarn
 
       - name: Start Dev Server
         run: |
@@ -37,4 +37,3 @@ jobs:
       - name: Kill Dev Server
         run: |
           pkill -f "nestly dev" || true
-          

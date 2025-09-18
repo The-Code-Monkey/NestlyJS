@@ -1,4 +1,4 @@
-process.on("message", async (msg) => {
+process.on("message", async (msg: { url: string }) => {
   const { url } = msg;
 
   // Example SSR logic
