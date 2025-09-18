@@ -24,6 +24,9 @@ jobs:
       - name: Build Server
         run: yarn workspace @nestlyjs/server build
 
+      - name: Link server package
+        run: yarn workspace @nestlyjs/server link
+
       - name: Start Dev Server
         run: |
           # Start nestly dev in background
