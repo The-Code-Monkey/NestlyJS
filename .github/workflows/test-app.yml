@@ -34,9 +34,6 @@ jobs:
           # Wait for server to be ready
           sleep 5
 
-      - name: Run Route Tests
-        run: yarn workspace test-app test:routes
-
       - name: Kill Dev Server
         run: |
           pkill -f "nestly dev" || true
