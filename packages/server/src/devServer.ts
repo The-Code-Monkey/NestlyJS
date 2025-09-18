@@ -26,9 +26,11 @@ export function start({ port = 3000 }: { port?: number }) {
     ssrWorker = forkWorker("ssr");
     apiWorker = forkWorker("api");
 
+    // ----------------------------
+    // MASTER NET SERVER SIMPLIFIED
+    // ----------------------------
     const server = net.createServer((socket) => {
       // Forward socket immediately to SSR worker
-      // Workers will route to SSR or API internally
       ssrWorker.send("socket", socket);
     });
 
@@ -50,19 +52,38 @@ export function start({ port = 3000 }: { port?: number }) {
     const type = process.env.WORKER_TYPE;
     console.log(`[WORKER ${process.pid}] Starting as ${type}`);
 
+    // ----------------------------
+    // WORKER HTTP SERVER
+    // ----------------------------
     const server = require("http").createServer();
 
-    if (type === "api") require("./devAPIWorker").default(server);
-    else require("./devSSRWorker").default(server);
+    if (type === "api") {
+      require("./devAPIWorker").default(server);
+    } else {
+      require("./devSSRWorker").default(server);
+    }
 
+    // ----------------------------
+    // SOCKET HANDLING
+    // ----------------------------
     process.on("message", (msg, socket: any) => {
       if (msg === "socket" && socket) {
         console.log(
-          `[WORKER ${process.pid}] Received socket, emitting 'connection'`
+          `[WORKER ${process.pid}] Received socket, attaching HTTP server`
         );
-        socket.resume(); // ensure HTTP parser reads
+
+        // Ensure HTTP parser reads and attach to server
+        socket.resume();
         server.emit("connection", socket);
+        console.log(`[WORKER ${process.pid}] Connection attached`);
       }
     });
+
+    // ----------------------------
+    // LISTENING
+    // ----------------------------
+    server.listen(0, () =>
+      console.log(`[WORKER ${process.pid}] HTTP server listening`)
+    ); // use ephemeral port, master forwards sockets
   }
 }
