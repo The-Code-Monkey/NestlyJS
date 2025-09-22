@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "chokidar": "6.0.0",
+    "esbuild": "^0.25.10",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "ts-node": "10.9.2",
