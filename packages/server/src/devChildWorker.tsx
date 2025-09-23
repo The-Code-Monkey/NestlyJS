@@ -1,3 +1,5 @@
+// frontend.child.worker.ts
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import path from "path";
@@ -30,30 +32,24 @@ async function findLayoutComponents(urlPath: string) {
   const layoutPaths: string[] = [];
   let pathParts = urlPath.split("/").filter(Boolean);
   const routesIndex = pathParts.findIndex((part) => part === "routes");
-  pathParts = pathParts.slice(routesIndex);
 
-  for (let i = pathParts.length - 1; i >= 0; i--) {
+  if (routesIndex === -1) {
+    return layoutPaths;
+  }
+  pathParts = pathParts.slice(routesIndex + 1); // Start from the root directory ("routes") and go down to the current directory
+
+  for (let i = 0; i <= pathParts.length; i++) {
     const layoutPath = path.resolve(
       process.cwd(),
-      `${pathParts.slice(0, i + 1).join("/")}/layout.tsx`
+      "routes",
+      ...pathParts.slice(0, i),
+      "layout.tsx"
     );
     if (fs.existsSync(layoutPath)) {
       layoutPaths.push(layoutPath);
     }
   }
-  return layoutPaths;
-}
-
-// Get React element + CSR info
-async function getComponentElement(filePath: string, props: any = {}) {
-  const isCSR = isClientComponent(filePath);
-  const Comp = require(filePath).default;
-
-  return {
-    element: React.createElement(Comp, props),
-    isCSR,
-    filePath,
-  };
+  return layoutPaths.reverse();
 }
 
 // ----------------------------
@@ -61,102 +57,77 @@ async function getComponentElement(filePath: string, props: any = {}) {
 // ----------------------------
 process.on("message", async ({ file, url }: { file: string; url: string }) => {
   try {
-    // ----------------------------
-    // Phase 1: Create base element & detect CSR
-    // ----------------------------
-    const elementInfo = await getComponentElement(file, {});
-    let csrComponent: { filePath: string; element: React.ReactElement } | null =
-      elementInfo.isCSR
-        ? { filePath: elementInfo.filePath, element: elementInfo.element }
-        : null;
+    const allClientComponents: { filePath: string; routePath: string }[] = [];
 
-    // ----------------------------
-    // Phase 2: Find layout hierarchy
-    // ----------------------------
+    const originalCreateElement = React.createElement;
+    // @ts-ignore
+    React.createElement = (type: any, props: any, ...children: any[]) => {
+      const filePath = type?.__source?.fileName;
+      if (filePath && isClientComponent(filePath)) {
+        const routeMatch = filePath.match(/\/routes(.*)$/);
+        const routePath = routeMatch ? routeMatch[1] : filePath;
+        allClientComponents.push({ filePath, routePath });
+
+        const hydratableElement = originalCreateElement(
+          "div",
+          {
+            id: `hydrate-${routePath.replace(/\//g, "-")}`,
+            "data-client-component": routePath.replace(/\//g, "-"),
+            suppressHydrationWarning: true,
+          },
+          originalCreateElement(type, props, ...children)
+        );
+        return hydratableElement;
+      }
+      return originalCreateElement(type, props, ...children);
+    };
+
+    // Phase 1: Create the base page element, checking if it's a client component
+    const pageComponent = require(file).default;
+    let elementTree: any = React.createElement(pageComponent, {});
     const layoutPaths = await findLayoutComponents(
       file.replace("page.tsx", "")
     );
 
-    // ----------------------------
-    // Phase 3: Wrap elements with layouts
-    // ----------------------------
-    let elementTree = elementInfo.element;
-
-    if (csrComponent) {
-      // Wrap only the CSR component in a hydration div
-      // Extract route path after "/routes"
-      const routeMatch = csrComponent.filePath.match(/\/routes(.*)$/);
-      let routePath = routeMatch ? routeMatch[1] : csrComponent.filePath;
-
-      // Normalize for HTML ID
-      routePath = routePath.replace(/\//g, "-");
-
-      // Create the wrapper
-      const csrWrapper = React.createElement(
-        "div",
-        { id: `hydrate-${routePath}` },
-        csrComponent.element
-      );
-
-      // Wrap layouts around the csrWrapper
-      // @ts-ignore
-      elementTree = csrWrapper;
-      for (const layoutPath of layoutPaths.reverse()) {
-        const LayoutComp = require(layoutPath).default;
-        elementTree = React.createElement(LayoutComp, {
-          children: elementTree,
-        });
-      }
-    } else {
-      // Non-CSR: just wrap original element in layouts
-      for (const layoutPath of layoutPaths) {
-        const LayoutComp = require(layoutPath).default;
-        elementTree = React.createElement(LayoutComp, {
-          children: elementTree,
-        });
-      }
+    // --- FIX APPLIED HERE ---
+    // Correctly wrap the element tree with layouts in the correct order
+    console.log(layoutPaths);
+    for (const layoutPath of layoutPaths) {
+      const LayoutComp = require(layoutPath).default;
+      elementTree = React.createElement(LayoutComp, { children: elementTree });
     }
 
-    // ----------------------------
-    // Phase 4: Render to HTML
-    // ----------------------------
+    // Phase 2: Render to HTML
     const renderedHTML = renderToStaticMarkup(elementTree);
 
-    // ----------------------------
-    // Phase 5: Inject hydration script if CSR
-    // ----------------------------
+    // Phase 3: Restore original createElement
+    // @ts-ignore
+    React.createElement = originalCreateElement;
+
+    // Phase 4: Inject hydration scripts for all collected client components
     let finalHTML = renderedHTML;
-    if (csrComponent) {
-      const bundle = await bundleClient(csrComponent.filePath);
-
-      // Extract route path after "/routes"
-      const routeMatch = csrComponent.filePath.match(/\/routes(.*)$/);
-      let routePath = routeMatch ? routeMatch[1] : csrComponent.filePath;
-
-      // Normalize for HTML ID (replace slashes with dashes)
-      routePath = routePath.replace(/\//g, "-");
+    for (const comp of allClientComponents) {
+      const bundle = await bundleClient(comp.filePath);
+      const hydrationKey = comp.routePath.replace(/\//g, "-");
 
       finalHTML += `
       <script type="module">
       ${bundle}
       (function(){
       document.addEventListener("DOMContentLoaded", () => {
-        const el = document.getElementById("hydrate-${routePath}");
-        const Comp = window.__components?.["${routePath}"]?.default;
-console.log(el, Comp)
+        const el = document.getElementById("hydrate-${hydrationKey}");
+        const Comp = window.__components?.["${hydrationKey}"]?.default;
         if (el && Comp) {
           window.ReactDOMClient.hydrateRoot(el, window.React.createElement(Comp, {}));
         } else {
-          console.warn("Hydration skipped: element or component not found");
+          console.warn("Hydration skipped: element or component not found for ${hydrationKey}");
         }
       });
       })();
       </script>`;
     }
 
-    // ----------------------------
-    // Phase 6: Send back
-    // ----------------------------
+    // Phase 5: Send back
     process.send?.({
       type: "render",
       html: finalHTML,
