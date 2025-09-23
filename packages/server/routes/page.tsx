@@ -1,4 +1,12 @@
+"use client";
+
+import { useEffect } from "react";
+
 const Page = () => {
+  useEffect(() => {
+    console.log("Page mounted");
+  }, []);
+
   return (
     <div>
       <h1>Welcome to the Page!</h1>
