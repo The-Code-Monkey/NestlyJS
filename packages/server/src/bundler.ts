@@ -2,9 +2,18 @@ import { build } from "esbuild";
 import path from "path";
 
 /**
- * Bundles a React component file dynamically and returns the JS code as a string.
- * @param filePath Absolute or relative path to the component file.
- * @returns Fully bundled browser-ready JS string.
+ * Bundle a React component file for browser delivery and return the bundled ESM code as a string.
+ *
+ * The produced bundle uses the React automatic JSX runtime, targets ES2022, and includes an injected shim.
+ * After the compiled code it appends a registration snippet that, when the bundle runs in the browser, ensures
+ * window.__components exists and registers the component's default export under a route-derived key.
+ *
+ * The route key is computed by taking the part of `filePath` after `/routes` (if present) or the file's basename,
+ * with path separators converted to dashes.
+ *
+ * @param filePath - Absolute or relative path to the entry component file to bundle.
+ * @returns The bundled JavaScript (ESM) as a string including the registration snippet, or an empty string if no output was produced.
+ * @throws Any errors raised by esbuild during the build process are propagated.
  */
 export async function bundleClientDynamic(filePath: string): Promise<string> {
   const absPath = path.resolve(filePath);

@@ -12,7 +12,16 @@ console.log(`[CHILD ${process.pid}] Booting SSR child worker`);
 // Helpers
 // ----------------------------
 
-// Detect "use client"
+/**
+ * Check whether a source file declares the `"use client"` directive.
+ *
+ * Reads up to the first 10 lines of the file, finds the first non-empty,
+ * non-comment line, and returns true if that line is a `"use client"` directive.
+ *
+ * @param filePath - Path to the source file to inspect (absolute or relative).
+ * @returns `true` if the file's first meaningful statement is `"use client"`, otherwise `false`.
+ *          Also returns `false` if the file cannot be read.
+ */
 function isClientComponent(filePath: string) {
   try {
     const buf = fs.readFileSync(filePath, "utf8");
@@ -27,7 +36,17 @@ function isClientComponent(filePath: string) {
   }
 }
 
-// Recursively find layout paths for a given URL
+/**
+ * Find layout.tsx files for a given route path, ordered from outermost to innermost.
+ *
+ * Given a file system URL path that includes a "routes" segment, this function walks
+ * down the route segments from the repository's "routes" directory and collects any
+ * layout.tsx files found at each level. If the provided path does not contain a
+ * "routes" segment, an empty array is returned.
+ *
+ * @param urlPath - A file-system-style path (e.g., "/src/routes/blog/post/page.tsx") that includes a "routes" segment.
+ * @returns A promise that resolves to an array of absolute file paths to `layout.tsx` files, ordered outermost → innermost.
+ */
 async function findLayoutComponents(urlPath: string) {
   const layoutPaths: string[] = [];
   let pathParts = urlPath.split("/").filter(Boolean);
