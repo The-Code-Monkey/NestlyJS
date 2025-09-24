@@ -5,7 +5,7 @@ const Button = ({ name }: { name: string }) => {
     window.alert("Button:" + name + " clicked!");
   };
 
-  return <button onClick={handleClick}>Click me!</button>;
+  return <button onClick={handleClick}>Click me! {name}</button>;
 };
 
 export default Button;
