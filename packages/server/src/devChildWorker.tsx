@@ -258,35 +258,22 @@ process.on("message", async ({ file, url }: { file: string; url: string }) => {
       const bundle = await bundleClient(comp.filePath);
       const hydrationKey = comp.routePath.replace(/\//g, "-");
 
-      // Wrap the bundle so it automatically registers itself
-      // into window.__components for hydration
       finalHTML += `
-    <script type="module">
-      // Ensure global registry exists
-      window.__components = window.__components || {};
-
-      // Execute the client bundle
-      (async () => {
-        ${bundle}
-        // The bundle itself should export default as 'default' in the module scope
-        // Assign it to window.__components
-        if (typeof defaultExport !== "undefined") {
-          window.__components["${hydrationKey}"] = { default: defaultExport };
-        }
+      <script type="module">
+      ${bundle}
+      (function() {
+        const hydrationKey = "${hydrationKey}";
+        document.addEventListener("DOMContentLoaded", () => {
+          const el = document.getElementById("hydrate-" + hydrationKey);
+          const Comp = window.__components?.[hydrationKey]?.default;
+          if (el && Comp) {
+            window.ReactDOMClient.hydrateRoot(el, React.createElement(Comp, {}));
+          } else {
+            console.warn("Hydration skipped: element or component not found for", hydrationKey);
+          }
+        });
       })();
-
-      // Hydrate on DOMContentLoaded
-      document.addEventListener("DOMContentLoaded", () => {
-        const el = document.getElementById("hydrate-${hydrationKey}");
-        const Comp = window.__components?.["${hydrationKey}"]?.default;
-        if (el && Comp) {
-          window.ReactDOMClient.hydrateRoot(el, window.React.createElement(Comp, {}));
-        } else {
-          console.warn("Hydration skipped: element or component not found for ${hydrationKey}");
-        }
-      });
-    </script>
-    `;
+      </script>`;
     }
 
     // ---------------- Phase 6: send back ----------------
