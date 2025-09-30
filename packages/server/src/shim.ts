@@ -8,8 +8,8 @@ import ReactDOM from "react-dom/client";
 declare global {
   interface Window {
     React: typeof React;
-    ReactDOMClient: typeof ReactDOM;
-    __components?: Record<string, any>;
+    ReactDOMClient: typeof ReactDOMClient;
+    __components: Record<string, React.ComponentType<any>>;
   }
 }
 
