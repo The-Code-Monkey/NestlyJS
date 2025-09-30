@@ -19,6 +19,6 @@
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "ts-node": "10.9.2",
-    "typescript": "5.9.2"
+    "typescript": "5.9.3"
   }
 }
