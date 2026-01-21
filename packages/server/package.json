@@ -11,13 +11,13 @@
   },
   "devDependencies": {
     "@types/node": "24.10.9",
-    "@types/react": "19.2.0",
-    "@types/react-dom": "19.2.0"
+    "@types/react": "19.2.9",
+    "@types/react-dom": "19.2.3"
   },
   "dependencies": {
     "chokidar": "5.0.0",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "ts-node": "10.9.2",
     "typescript": "5.9.3"
   }
