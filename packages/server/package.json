@@ -16,8 +16,8 @@
   },
   "dependencies": {
     "chokidar": "5.0.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "ts-node": "10.9.2",
     "typescript": "5.9.3"
   }
