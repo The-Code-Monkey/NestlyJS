@@ -310,10 +310,10 @@
   resolved "https://registry.yarnpkg.com/@types/node/-/node-12.20.55.tgz#c329cbd434c42164f846b909bd6f85b5537f6240"
   integrity sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==
 
-"@types/react-dom@19.2.5":
-  version "19.2.5"
-  resolved "https://registry.yarnpkg.com/@types/react-dom/-/react-dom-19.2.5.tgz#d4ecf8d704cab59901d3fbb0975b6f855306595f"
-  integrity sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==
+"@types/react-dom@19.2.7":
+  version "19.2.7"
+  resolved "https://registry.yarnpkg.com/@types/react-dom/-/react-dom-19.2.7.tgz#eba78fc6201e564986ec40d56c86c8434593cace"
+  integrity sha512-I8bPpDLcHBv1qiIiXDCy71Rt8eQDKJP0sMSWJphDdAcdqiJ1sGpZamavoEIRZmYzjia9LuEb2HlYdDpmoENpvQ==
 
 "@types/react@19.2.18":
   version "19.2.18"
