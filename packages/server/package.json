@@ -10,7 +10,7 @@
     "build": "tsc && chmod +x ./dist/bin/nestly.js"
   },
   "devDependencies": {
-    "@types/node": "24.13.4",
+    "@types/node": "24.13.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0"
   },
