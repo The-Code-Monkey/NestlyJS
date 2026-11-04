@@ -11,6 +11,8 @@
 - One page bundle per page; shared dependencies such as React included once.
 - Plain CSS imports from pages, layouts, and client components.
 - Static assets served from `public/` by extension-addressed paths, streamed with `GET` and `HEAD`.
+- Production build into `.nestly/` with hashed client assets and shared chunks.
+- `nestly start` serves production pages, APIs, static files, and built assets.
 - HTML, JavaScript, and CSS cached per page; any route file change triggers a full reload.
 - API handlers return `{ status, body }` with a JSON body.
 - Query strings and fragments are ignored during route lookup.
@@ -18,7 +20,6 @@
 ## Version 2
 
 - Hot module replacement (HMR). Version 1 uses full page reloads.
-- Production build and `nestly start`.
 
 ## Deferred
 

@@ -2,8 +2,8 @@ import { build } from "esbuild";
 import path from "path";
 
 export interface ClientComponentEntry {
+  id: string;
   filePath: string;
-  instanceKey: string;
 }
 
 export interface PageBundle {
@@ -21,15 +21,20 @@ export async function bundlePageClient(
   if (components.length === 0) return { js: "", css: "" };
 
   const shimPath = path.resolve(__dirname, "shim.js");
+  const unique = new Map<string, string>();
+  for (const component of components) {
+    if (!unique.has(component.id)) unique.set(component.id, component.filePath);
+  }
+  const entries = [...unique];
 
-  const imports = components
-    .map((comp, index) => `import __component${index} from ${JSON.stringify(comp.filePath)};`)
+  const imports = entries
+    .map(([, filePath], index) => `import __component${index} from ${JSON.stringify(filePath)};`)
     .join("\n");
 
-  const registrations = components
+  const registrations = entries
     .map(
-      (comp, index) =>
-        `window.__components[${JSON.stringify(comp.instanceKey)}] = { default: __component${index}?.default ?? __component${index} };`
+      ([id], index) =>
+        `window.__components[${JSON.stringify(id)}] = { default: __component${index}?.default ?? __component${index} };`
     )
     .join("\n");
 

@@ -40,6 +40,18 @@ _Avoid_: Resource, media file
 The app-root `public/` directory whose files are served from the URL root.
 _Avoid_: Assets folder, static folder
 
+**Build**:
+The process that compiles an app's routes and client components into deployable output.
+_Avoid_: Compile step, bundle step
+
+**Build Output**:
+The `.nestly/` directory produced by a build.
+_Avoid_: Dist folder, artifact folder
+
+**Manifest**:
+The build index that maps route patterns to compiled server entries and client assets.
+_Avoid_: Route table, asset map
+
 **Layout**:
 A React wrapper declared by `layout.tsx` in a route directory. Layouts apply to pages in that directory and its descendants.
 _Avoid_: Shell, template

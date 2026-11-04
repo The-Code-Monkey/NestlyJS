@@ -59,7 +59,7 @@ export function isStaticAssetPath(urlPath: string) {
   return /\.[A-Za-z0-9]+$/.test(lastSegment);
 }
 
-function resolveStaticFile(urlPath: string): StaticFile | null {
+function resolveStaticFile(rootPath: string, urlPath: string): StaticFile | null {
   const cleanPath = cleanUrlPath(urlPath);
 
   let segments: string[];
@@ -87,7 +87,7 @@ function resolveStaticFile(urlPath: string): StaticFile | null {
 
   let publicRoot: string;
   try {
-    publicRoot = fs.realpathSync(path.join(process.cwd(), "public"));
+    publicRoot = fs.realpathSync(rootPath);
   } catch {
     return null;
   }
@@ -122,7 +122,20 @@ export function serveStaticAsset(
   res: ServerResponse,
   urlPath: string
 ) {
-  const file = resolveStaticFile(urlPath);
+  serveFile(
+    req,
+    res,
+    resolveStaticFile(path.join(process.cwd(), "public"), urlPath),
+    "no-store"
+  );
+}
+
+function serveFile(
+  req: IncomingMessage,
+  res: ServerResponse,
+  file: StaticFile | null,
+  cacheControl: string
+) {
   if (!file) {
     res.writeHead(404);
     res.end("Not found");
@@ -132,7 +145,7 @@ export function serveStaticAsset(
   res.writeHead(200, {
     "Content-Type": file.contentType,
     "Content-Length": file.size,
-    "Cache-Control": "no-store",
+    "Cache-Control": cacheControl,
   });
 
   if (req.method === "HEAD") {
@@ -146,4 +159,20 @@ export function serveStaticAsset(
     res.end();
   });
   stream.pipe(res);
+}
+
+/**
+ * Serves a hashed production asset from `.nestly/client`.
+ */
+export function serveClientAsset(
+  req: IncomingMessage,
+  res: ServerResponse,
+  urlPath: string
+) {
+  serveFile(
+    req,
+    res,
+    resolveStaticFile(path.join(process.cwd(), ".nestly", "client"), urlPath),
+    "public, max-age=31536000, immutable"
+  );
 }
