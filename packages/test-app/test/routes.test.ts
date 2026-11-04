@@ -3,14 +3,22 @@ import http from "http";
 const PORT = 4000; // dev server port for testing
 
 async function request(path: string, method: string = "GET") {
-  return new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
+  return new Promise<{
+    statusCode: number;
+    body: string;
+    headers: http.IncomingHttpHeaders;
+  }>((resolve, reject) => {
     const req = http.request(
       { hostname: "localhost", port: PORT, path, method },
       (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () =>
-          resolve({ statusCode: res.statusCode || 0, body: data })
+          resolve({
+            statusCode: res.statusCode || 0,
+            body: data,
+            headers: res.headers,
+          })
         );
       }
     );
@@ -100,6 +108,37 @@ async function runTests() {
     const catchAllApi = await request("/files/a/b", "POST");
     if (!catchAllApi.body.includes('"path":["a","b"]')) {
       throw new Error("Catch-all API /files/[...path] failed");
+    }
+
+    const staticFile = await request("/hello.txt");
+    if (staticFile.statusCode !== 200) {
+      throw new Error("Static file /hello.txt failed");
+    }
+    if (staticFile.body.trim() !== "hello static") {
+      throw new Error("Static file body failed");
+    }
+    if (!staticFile.headers["content-type"]?.includes("text/plain")) {
+      throw new Error("Static file content type failed");
+    }
+
+    const staticHead = await request("/hello.txt", "HEAD");
+    if (staticHead.statusCode !== 200 || staticHead.body !== "") {
+      throw new Error("Static HEAD /hello.txt failed");
+    }
+
+    const staticQuery = await request("/hello.txt?v=1");
+    if (staticQuery.body.trim() !== "hello static") {
+      throw new Error("Static query string failed");
+    }
+
+    const missingStatic = await request("/missing.png");
+    if (missingStatic.statusCode !== 404) {
+      throw new Error("Missing static file must not fall back to routes");
+    }
+
+    const staticLikeRoute = await request("/blog/asset.png");
+    if (staticLikeRoute.statusCode !== 404) {
+      throw new Error("Static-like URL must not match catch-all route");
     }
 
     const missing = await request("/missing");

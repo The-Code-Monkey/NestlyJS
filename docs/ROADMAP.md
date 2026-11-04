@@ -10,6 +10,7 @@
 - Client components with `"use client"` and hydration.
 - One page bundle per page; shared dependencies such as React included once.
 - Plain CSS imports from pages, layouts, and client components.
+- Static assets served from `public/` by extension-addressed paths, streamed with `GET` and `HEAD`.
 - HTML, JavaScript, and CSS cached per page; any route file change triggers a full reload.
 - API handlers return `{ status, body }` with a JSON body.
 - Query strings and fragments are ignored during route lookup.
@@ -17,7 +18,6 @@
 ## Version 2
 
 - Hot module replacement (HMR). Version 1 uses full page reloads.
-- Static asset serving, including `/public`.
 - Production build and `nestly start`.
 
 ## Deferred
