@@ -34,6 +34,7 @@ const required = [
   "dist/devSSRWorker.js",
   "dist/routeResolver.js",
   "dist/shim.js",
+  "dist/staticAssets.js",
 ];
 
 const forbiddenPrefixes = ["src/", "test/", "routes/"];

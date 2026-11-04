@@ -32,6 +32,14 @@ _Avoid_: Layout folder, namespace folder
 The named values captured from a dynamic route's URL segments.
 _Avoid_: Query params, search params, URL variables
 
+**Static Asset**:
+A file served from the Public Directory, addressed by a URL path that ends with a file extension.
+_Avoid_: Resource, media file
+
+**Public Directory**:
+The app-root `public/` directory whose files are served from the URL root.
+_Avoid_: Assets folder, static folder
+
 **Layout**:
 A React wrapper declared by `layout.tsx` in a route directory. Layouts apply to pages in that directory and its descendants.
 _Avoid_: Shell, template

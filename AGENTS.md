@@ -25,6 +25,7 @@ Working:
 - Pages cache HTML, JavaScript, and CSS until a file under `routes/` changes.
 - Non-GET API requests resolve to named method exports in `api.ts`.
 - Dynamic routes (`[param]`, `[...param]`, `[[...param]]`) capture route params; route groups `(name)` group files without affecting the URL.
+- Static assets in `public/` are served by extension-addressed paths with `GET` and `HEAD`.
 - Query strings and fragments are ignored during route lookup.
 
 Incomplete or stale:
@@ -36,7 +37,8 @@ Incomplete or stale:
 ## Architecture map
 
 - `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start` and supports `--port`. `start` is not implemented.
-- `src/devServer.ts` — primary process forks one worker per CPU core. Each worker routes in this order: GET page, API handler, 404. Dead workers restart automatically.
+- `src/devServer.ts` — primary process forks one worker per CPU core. Each worker routes in this order: static asset, GET page, API handler, 404. Dead workers restart automatically.
+- `src/staticAssets.ts` — streams files from `process.cwd()/public`, maps extensions to content types, and rejects traversal and symlink escapes.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
 - `src/devSSRWorker.ts` — forks one child per URL path, passes route params, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
 - `src/devChildWorker.tsx` — renders the page with route params, applies layouts from the route directory, walks the element tree, wraps `"use client"` components, and emits SSR, CSS, and hydration HTML. Caches HTML, JavaScript, and CSS per child.
@@ -75,7 +77,7 @@ yarn changeset
 ## Known gaps and warnings
 
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
-- HMR, static asset serving, and the production build are not implemented. See `docs/ROADMAP.md`.
+- HMR and the production build are not implemented. See `docs/ROADMAP.md`.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
 - Worker failures are surfaced as generic 500 responses.
 

@@ -11,6 +11,8 @@ const m = vi.hoisted(() => ({
   getAPI: vi.fn(),
   ssr: vi.fn(async () => {}),
   api: vi.fn(async () => {}),
+  isStatic: vi.fn(),
+  serve: vi.fn(),
 }));
 
 vi.mock("cluster", () => ({
@@ -39,6 +41,10 @@ vi.mock("../src/routeResolver", () => ({
   hasPageForGET: m.hasPage,
   getAPIMethod: m.getAPI,
 }));
+vi.mock("../src/staticAssets", () => ({
+  isStaticAssetPath: m.isStatic,
+  serveStaticAsset: m.serve,
+}));
 
 import { start } from "../src/devServer";
 
@@ -54,6 +60,7 @@ describe("devServer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     m.state.isPrimary = true;
+    m.isStatic.mockReturnValue(false);
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -77,6 +84,34 @@ describe("devServer", () => {
     const onExit = m.on.mock.calls[0][1];
     onExit({ process: { pid: 123 } });
     expect(m.fork).toHaveBeenCalledTimes(2);
+  });
+
+  it("serves static asset paths before routes", async () => {
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+    m.isStatic.mockReturnValue(true);
+
+    const handler: Handler = m.createServer.mock.calls[0][0];
+    const req = { url: "/logo.png", method: "GET" };
+    const res = response();
+    await handler(req, res);
+
+    expect(m.serve).toHaveBeenCalledWith(req, res, "/logo.png");
+    expect(m.ssr).not.toHaveBeenCalled();
+    expect(m.hasPage).not.toHaveBeenCalled();
+  });
+
+  it("serves HEAD static asset paths", async () => {
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+    m.isStatic.mockReturnValue(true);
+
+    const handler: Handler = m.createServer.mock.calls[0][0];
+    const req = { url: "/logo.png", method: "HEAD" };
+    const res = response();
+    await handler(req, res);
+
+    expect(m.serve).toHaveBeenCalledWith(req, res, "/logo.png");
   });
 
   it("routes a GET page request to the SSR handler", async () => {
