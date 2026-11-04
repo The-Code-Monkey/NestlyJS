@@ -19,7 +19,7 @@
   "devDependencies": {
     "@changesets/cli": "2.31.1",
     "@vitest/coverage-v8": "^5.1.0",
-    "jsdom": "26",
+    "jsdom": "30",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "vite": "^8.3.5",
