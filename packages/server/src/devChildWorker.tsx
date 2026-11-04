@@ -22,6 +22,10 @@ function isClientComponent(filePath: string) {
   }
 }
 
+function serializeProps(props: any) {
+  return JSON.stringify(props || {}).replace(/</g, "\\u003c");
+}
+
 function attachFilePaths(mod: any, filePath: string) {
   if (!mod) return mod;
   const maybeTag = (comp: any) => {
@@ -120,9 +124,13 @@ function wrapClientComponents(
   if (!element || typeof element !== "object") return element;
   const type = element.type;
   const filePath = type?.__filePath;
+  // Async server components are already resolved, so recurse into their output
+  // instead of hydrating the async function as a client component.
+  const isAsync = type?.constructor?.name === "AsyncFunction";
   const isClient =
     filePath &&
-    (isClientComponent(filePath) || fileContainsClientComponent(filePath));
+    (isClientComponent(filePath) ||
+      (!isAsync && fileContainsClientComponent(filePath)));
 
   if (isClient) {
     const routeMatch = filePath.match(/\/routes(.*)$/);
@@ -204,13 +212,13 @@ process.on("message", async ({ file, url }: { file: string; url: string }) => {
     // inject hydration bundles
     for (const comp of allClientComponents) {
       const bundle = await bundleClient(comp.filePath, comp.instanceKey);
-      const propsJSON = JSON.stringify(comp.props || {});
+      const propsJSON = serializeProps(comp.props);
 
       finalHTML += `
       <script type="module">
       ${bundle}
       (function() {
-        const hydrationKey = "${comp.instanceKey}";
+        const hydrationKey = ${JSON.stringify(comp.instanceKey)};
         const props = ${propsJSON};
         document.addEventListener("DOMContentLoaded", () => {
           const el = document.getElementById("hydrate-" + hydrationKey);
