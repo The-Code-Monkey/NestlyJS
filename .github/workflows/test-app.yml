@@ -33,20 +33,36 @@ jobs:
       - name: Run route integration tests
         run: |
           set -euo pipefail
-          PORT=4000 yarn workspace test-app dev > /tmp/nestly-dev.log 2>&1 &
+          cd packages/test-app
+          PORT=4000 node ../../packages/server/dist/bin/nestly.js dev > /tmp/nestly-dev.log 2>&1 &
           server_pid=$!
+          cd ../..
 
           cleanup() {
-            pkill -f "dist/bin/nestly.js dev" || true
             kill "$server_pid" 2>/dev/null || true
+            pkill -f "dist/bin/nestly.js dev" || true
           }
           trap cleanup EXIT
 
+          ready=0
           for _ in $(seq 1 30); do
-            if curl -fsS http://localhost:4000/ > /dev/null; then
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "Dev server exited early"
+              break
+            fi
+            if curl -fsS http://127.0.0.1:4000/ > /dev/null; then
+              ready=1
               break
             fi
             sleep 1
           done
 
-          yarn workspace test-app test:routes
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/nestly-dev.log
+            exit 1
+          fi
+
+          if ! yarn workspace test-app test:routes; then
+            cat /tmp/nestly-dev.log
+            exit 1
+          fi

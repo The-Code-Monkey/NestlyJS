@@ -20,7 +20,11 @@ export function run(
     }
   });
 
-  const port = flags.port ? parseInt(flags.port) : undefined;
+  const port = flags.port
+    ? parseInt(flags.port)
+    : process.env.PORT
+      ? parseInt(process.env.PORT)
+      : undefined;
 
   switch (command) {
     case "dev":
