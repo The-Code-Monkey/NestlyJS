@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "chokidar": "6.0.0",
-    "esbuild": "^0.25.10",
+    "esbuild": "^0.28.0",
     "ts-node": "10.9.2",
     "typescript": "5.9.3"
   }
