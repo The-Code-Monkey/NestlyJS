@@ -1,13 +1,22 @@
 {
   "name": "@nestlyjs/server",
   "version": "0.1.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "tsconfig.devServer.json"
+  ],
   "bin": {
     "nestly": "dist/bin/nestly.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x ./dist/bin/nestly.js",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && chmod +x ./dist/bin/nestly.js",
     "test": "vitest run --coverage"
   },
   "devDependencies": {
