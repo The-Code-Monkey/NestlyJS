@@ -52,6 +52,18 @@ _Avoid_: Dist folder, artifact folder
 The build index that maps route patterns to compiled server entries and client assets.
 _Avoid_: Route table, asset map
 
+**Hot Module Replacement (HMR)**:
+Development updates that apply without a full page reload when possible.
+_Avoid_: Live reload, fast refresh
+
+**Live Reload**:
+A development full-page reload triggered by a file change.
+_Avoid_: HMR, hot reload
+
+**CSS Hot Swap**:
+Replacing the active stylesheet in place without reloading the page.
+_Avoid_: Style HMR, CSS injection
+
 **Layout**:
 A React wrapper declared by `layout.tsx` in a route directory. Layouts apply to pages in that directory and its descendants.
 _Avoid_: Shell, template

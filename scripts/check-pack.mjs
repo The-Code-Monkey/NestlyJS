@@ -33,6 +33,7 @@ const required = [
   "dist/devChildWorker.js",
   "dist/devServer.js",
   "dist/devSSRWorker.js",
+  "dist/hmr.js",
   "dist/manifest.js",
   "dist/prodRouter.js",
   "dist/routePatterns.js",

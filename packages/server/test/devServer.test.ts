@@ -13,6 +13,8 @@ const m = vi.hoisted(() => ({
   api: vi.fn(async () => {}),
   isStatic: vi.fn(),
   serve: vi.fn(),
+  hmrHandler: vi.fn(),
+  startHmr: vi.fn(),
 }));
 
 vi.mock("cluster", () => ({
@@ -44,6 +46,11 @@ vi.mock("../src/routeResolver", () => ({
 vi.mock("../src/staticAssets", () => ({
   isStaticAssetPath: m.isStatic,
   serveStaticAsset: m.serve,
+}));
+vi.mock("../src/hmr", () => ({
+  HMR_PATH: "/_nestly/hmr",
+  hmrHandler: m.hmrHandler,
+  startHmrWatcher: m.startHmr,
 }));
 
 import { start } from "../src/devServer";
@@ -84,6 +91,20 @@ describe("devServer", () => {
     const onExit = m.on.mock.calls[0][1];
     onExit({ process: { pid: 123 } });
     expect(m.fork).toHaveBeenCalledTimes(2);
+  });
+
+  it("routes the HMR endpoint to the event stream", async () => {
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+
+    const handler: Handler = m.createServer.mock.calls[0][0];
+    const req = { url: "/_nestly/hmr?path=%2F", method: "GET" };
+    const res = response();
+    await handler(req, res);
+
+    expect(m.startHmr).toHaveBeenCalled();
+    expect(m.hmrHandler).toHaveBeenCalledWith(req, res);
+    expect(m.ssr).not.toHaveBeenCalled();
   });
 
   it("serves static asset paths before routes", async () => {
