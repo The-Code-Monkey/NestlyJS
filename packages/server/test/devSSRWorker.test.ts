@@ -4,11 +4,13 @@ const m = vi.hoisted(() => {
   const state: any = {
     children: [] as any[],
     watcherCb: null as any,
-    getRouteFiles: vi.fn(() => ({
+    exists: vi.fn(() => true),
+    resolveRoute: vi.fn(() => ({
+      routeDir: "/tmp",
       pageFile: "/tmp/page.tsx",
       apiFile: "/tmp/api.ts",
+      params: { slug: "hello" },
     })),
-    hasPage: vi.fn(),
   };
 
   state.watch = vi.fn(() => {
@@ -39,10 +41,10 @@ const m = vi.hoisted(() => {
 });
 
 vi.mock("chokidar", () => ({ default: { watch: m.watch } }));
+vi.mock("fs", () => ({ default: { existsSync: m.exists } }));
 vi.mock("child_process", () => ({ fork: m.fork }));
 vi.mock("../src/routeResolver", () => ({
-  getRouteFiles: m.getRouteFiles,
-  hasPageForGET: m.hasPage,
+  resolveRoute: m.resolveRoute,
 }));
 
 import { devSSRHandler } from "../src/devSSRWorker";
@@ -60,7 +62,12 @@ describe("devSSRHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     m.children.length = 0;
-    m.hasPage.mockReturnValue(true);
+    m.resolveRoute.mockReturnValue({
+      routeDir: "/tmp",
+      pageFile: "/tmp/page.tsx",
+      apiFile: "/tmp/api.ts",
+      params: { slug: "hello" },
+    });
   });
 
   it("returns 404 for non-GET requests", async () => {
@@ -71,7 +78,7 @@ describe("devSSRHandler", () => {
   });
 
   it("returns 404 when no page exists", async () => {
-    m.hasPage.mockReturnValue(false);
+    m.resolveRoute.mockReturnValue(null);
     const res = response();
     await devSSRHandler({ url: "/", method: "GET" } as any, res as any);
     expect(res.writeHead).toHaveBeenCalledWith(404);
@@ -87,6 +94,7 @@ describe("devSSRHandler", () => {
     expect(child.send).toHaveBeenCalledWith({
       file: "/tmp/page.tsx",
       url,
+      params: { slug: "hello" },
     });
 
     child.handlers.message({ type: "render", url, html: "<h1>ok</h1>" });

@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import path from "path";
 import fs from "fs";
 import { bundlePageClient } from "./bundler";
+import type { RouteParams } from "./routeResolver";
 
 console.log(`[CHILD ${process.pid}] Booting SSR child worker`);
 
@@ -186,7 +187,11 @@ let cachedHtml: string | null = null;
 let cachedBundle: Awaited<ReturnType<typeof bundlePageClient>> | null = null;
 let cachedStyle: string | null = null;
 
-export async function renderPage(file: string, url: string): Promise<string> {
+export async function renderPage(
+  file: string,
+  url: string,
+  params: RouteParams = {}
+): Promise<string> {
   try {
     if (cachedHtml !== null) return cachedHtml;
 
@@ -207,7 +212,7 @@ export async function renderPage(file: string, url: string): Promise<string> {
 
     // build element tree, then render server components and wrap client ones
     const pageModule = preloadedModules.get(file);
-    let pageElement: any = React.createElement(pageModule.default, {});
+    let pageElement: any = React.createElement(pageModule.default, { params });
 
     for (const layoutPath of layoutPaths) {
       const LayoutModule = preloadedModules.get(layoutPath);
@@ -285,10 +290,14 @@ export async function renderPage(file: string, url: string): Promise<string> {
 }
 
 export async function handleMessage(
-  { file, url }: { file: string; url: string },
+  {
+    file,
+    url,
+    params,
+  }: { file: string; url: string; params?: RouteParams },
   send: (msg: any) => void = process.send?.bind(process) ?? (() => {})
 ) {
-  send({ type: "render", html: await renderPage(file, url), url });
+  send({ type: "render", html: await renderPage(file, url, params), url });
 }
 
 /* v8 ignore start */

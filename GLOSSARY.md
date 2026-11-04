@@ -12,6 +12,26 @@ _Avoid_: Endpoint, path (when referring to the directory contract)
 A route's default-rendered React view, defined by `page.tsx` in the route directory.
 _Avoid_: Screen, view
 
+**Dynamic Route**:
+A route whose directory name uses a bracketed segment to match URL segments.
+_Avoid_: Wildcard route, parameterized path
+
+**Catch-All Route**:
+A dynamic route named `[...param]` that matches one or more remaining URL segments as a param array.
+_Avoid_: Splat route, wildcard route
+
+**Optional Catch-All Route**:
+A dynamic route named `[[...param]]` that matches zero or more remaining URL segments. With zero segments the param is undefined.
+_Avoid_: Splat route, wildcard route
+
+**Route Group**:
+A directory named `(name)` that organizes routes and layouts without adding a URL segment.
+_Avoid_: Layout folder, namespace folder
+
+**Route Params**:
+The named values captured from a dynamic route's URL segments.
+_Avoid_: Query params, search params, URL variables
+
 **Layout**:
 A React wrapper declared by `layout.tsx` in a route directory. Layouts apply to pages in that directory and its descendants.
 _Avoid_: Shell, template

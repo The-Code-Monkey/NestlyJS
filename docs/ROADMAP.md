@@ -3,6 +3,9 @@
 ## Version 1 — development only
 
 - File routes: `page.tsx`, `layout.tsx`, `api.ts` under `routes/`.
+- Dynamic routes: `[param]`, catch-all `[...param]`, and optional catch-all `[[...param]]`, with route params.
+- Route groups `(name)` organize routes and layouts without adding URL segments.
+- Route precedence: static, dynamic, catch-all, then optional catch-all.
 - Server-rendered pages with nested layouts.
 - Client components with `"use client"` and hydration.
 - One page bundle per page; shared dependencies such as React included once.
@@ -14,7 +17,6 @@
 ## Version 2
 
 - Hot module replacement (HMR). Version 1 uses full page reloads.
-- Dynamic routes such as `routes/blog/[slug]/page.tsx`, with route params.
 - Static asset serving, including `/public`.
 - Production build and `nestly start`.
 

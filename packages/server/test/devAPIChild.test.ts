@@ -51,6 +51,27 @@ describe("handleApiMessage", () => {
     });
   });
 
+  it("passes route params to the handler", async () => {
+    const file = writeApi(
+      "params",
+      `export async function POST(req: any) {
+        return { status: 200, body: { slug: req.params.slug } };
+      }`
+    );
+    const send = vi.fn();
+
+    await handleApiMessage(
+      { file, method: "POST", url: "/blog/hello", params: { slug: "hello" } },
+      send
+    );
+
+    expect(send).toHaveBeenCalledWith({
+      type: "apiResponse",
+      status: 200,
+      body: { slug: "hello" },
+    });
+  });
+
   it("defaults the status to 200", async () => {
     const file = writeApi(
       "default-status",

@@ -4,10 +4,14 @@ const m = vi.hoisted(() => {
   const state: any = {
     children: [] as any[],
     watchCb: null as any,
-    getAPI: vi.fn(() => () => {}),
-    getRouteFiles: vi.fn(() => ({
-      pageFile: "/tmp/page.tsx",
-      apiFile: "/tmp/api.ts",
+    getAPIRoute: vi.fn(() => ({
+      handler: () => {},
+      route: {
+        routeDir: "/tmp",
+        pageFile: "/tmp/page.tsx",
+        apiFile: "/tmp/api.ts",
+        params: { slug: "hello" },
+      },
     })),
     exists: vi.fn(() => true),
   };
@@ -38,8 +42,7 @@ vi.mock("fs", () => ({
   default: { existsSync: m.exists, watch: m.watch },
 }));
 vi.mock("../src/routeResolver", () => ({
-  getAPIMethod: m.getAPI,
-  getRouteFiles: m.getRouteFiles,
+  getAPIRoute: m.getAPIRoute,
 }));
 
 import { devAPIHandler } from "../src/devAPIWorker";
@@ -57,12 +60,20 @@ describe("devAPIHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     m.children.length = 0;
-    m.getAPI.mockReturnValue(() => {});
+    m.getAPIRoute.mockReturnValue({
+      handler: () => {},
+      route: {
+        routeDir: "/tmp",
+        pageFile: "/tmp/page.tsx",
+        apiFile: "/tmp/api.ts",
+        params: { slug: "hello" },
+      },
+    });
     m.exists.mockReturnValue(true);
   });
 
   it("returns 404 when no API method exists", async () => {
-    m.getAPI.mockReturnValue(null);
+    m.getAPIRoute.mockReturnValue(null);
     const res = response();
     await devAPIHandler({ url: "/", method: "POST" } as any, res as any);
     expect(res.writeHead).toHaveBeenCalledWith(404);
@@ -91,6 +102,7 @@ describe("devAPIHandler", () => {
       file: "/tmp/api.ts",
       method: "POST",
       url,
+      params: { slug: "hello" },
     });
 
     child.handlers.message({

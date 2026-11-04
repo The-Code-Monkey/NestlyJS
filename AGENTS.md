@@ -24,6 +24,7 @@ Working:
 - Plain CSS imports from pages, layouts, and client components are inlined per page.
 - Pages cache HTML, JavaScript, and CSS until a file under `routes/` changes.
 - Non-GET API requests resolve to named method exports in `api.ts`.
+- Dynamic routes (`[param]`, `[...param]`, `[[...param]]`) capture route params; route groups `(name)` group files without affecting the URL.
 - Query strings and fragments are ignored during route lookup.
 
 Incomplete or stale:
@@ -36,12 +37,12 @@ Incomplete or stale:
 
 - `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start` and supports `--port`. `start` is not implemented.
 - `src/devServer.ts` — primary process forks one worker per CPU core. Each worker routes in this order: GET page, API handler, 404. Dead workers restart automatically.
-- `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. A GET prefers `page.tsx` over `api.ts`.
-- `src/devSSRWorker.ts` — forks one child per URL path, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
-- `src/devChildWorker.tsx` — renders the page, applies layouts from the URL path, walks the element tree, wraps `"use client"` components, and emits SSR, CSS, and hydration HTML. Caches HTML, JavaScript, and CSS per child.
+- `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
+- `src/devSSRWorker.ts` — forks one child per URL path, passes route params, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
+- `src/devChildWorker.tsx` — renders the page with route params, applies layouts from the route directory, walks the element tree, wraps `"use client"` components, and emits SSR, CSS, and hydration HTML. Caches HTML, JavaScript, and CSS per child.
 - `src/bundler.ts` — bundles all client components on a page into a single esbuild bundle with shared dependencies once; `src/shim.ts` exposes React globals in the browser.
 - `src/devAPIWorker.ts` — forks one child per `METHOD:URL`, watches the API file, and queues pending responses.
-- `src/devAPIChild.ts` — dynamically imports the API file and invokes the named HTTP method export. The handler must return `{ status, body }`.
+- `src/devAPIChild.ts` — dynamically imports the API file and invokes the named HTTP method export with `method`, `url`, `headers`, `body`, and `params`. The handler must return `{ status, body }`.
 
 ## Commands
 
@@ -74,7 +75,7 @@ yarn changeset
 ## Known gaps and warnings
 
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
-- Dynamic routes, HMR, static asset serving, and the production build are not implemented. See `docs/ROADMAP.md`.
+- HMR, static asset serving, and the production build are not implemented. See `docs/ROADMAP.md`.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
 - Worker failures are surfaced as generic 500 responses.
 

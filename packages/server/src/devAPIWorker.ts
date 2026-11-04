@@ -1,7 +1,7 @@
 // devAPIWorker.ts
 import http from "http";
 import { fork, ChildProcess } from "child_process";
-import { getAPIMethod, getRouteFiles } from "./routeResolver";
+import { getAPIRoute } from "./routeResolver";
 import fs from "fs";
 import path from "path";
 
@@ -17,15 +17,15 @@ export async function devAPIHandler(
 
   console.log(`[API WORKER ${process.pid}] Request: ${method} ${urlPath}`);
 
-  const apiFunc = getAPIMethod(urlPath, method);
-  if (!apiFunc) {
+  const api = getAPIRoute(urlPath, method);
+  if (!api) {
     res.writeHead(404);
     res.end("API route not found");
     return;
   }
 
   const key = `${method}:${urlPath}`;
-  const { apiFile } = getRouteFiles(urlPath);
+  const { apiFile } = api.route;
 
   // ----------------------------
   // Ensure child exists
@@ -88,5 +88,10 @@ export async function devAPIHandler(
   // Queue request and send to child
   // ----------------------------
   PENDING_REQUESTS.get(key)!.push(res);
-  ACTIVE_CHILDREN.get(key)!.send({ file: apiFile, method, url: req.url });
+  ACTIVE_CHILDREN.get(key)!.send({
+    file: apiFile,
+    method,
+    url: req.url,
+    params: api.route.params,
+  });
 }

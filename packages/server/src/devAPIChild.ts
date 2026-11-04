@@ -1,3 +1,5 @@
+import type { RouteParams } from "./routeResolver";
+
 console.log(`[CHILD ${process.pid}] Booting API child worker`);
 
 export interface ApiMessage {
@@ -6,10 +8,11 @@ export interface ApiMessage {
   url: string;
   headers?: any;
   body?: any;
+  params?: RouteParams;
 }
 
 export async function handleApiMessage(
-  { file, method, url, headers, body }: ApiMessage,
+  { file, method, url, headers, body, params }: ApiMessage,
   send: (msg: any) => void = process.send?.bind(process) ?? (() => {})
 ) {
   const pid = process.pid;
@@ -23,7 +26,7 @@ export async function handleApiMessage(
     if (typeof handler !== "function") {
       throw new Error(`Method ${method} in ${file} is not a function`);
     }
-    const result = await handler({ method, url, headers, body });
+    const result = await handler({ method, url, headers, body, params });
     if (!result) {
       throw new Error(`Method ${method} in ${file} did not return a result`);
     }
