@@ -36,7 +36,7 @@ export default function Button() {
     );
 
     const bundle = await bundlePageClient([
-      { filePath, instanceKey: "button-0" },
+      { id: "button-0", filePath },
     ]);
 
     expect(bundle.js).toContain("button-0");
@@ -57,7 +57,7 @@ export default function Styled() {
     );
 
     const bundle = await bundlePageClient([
-      { filePath, instanceKey: "styled-0" },
+      { id: "styled-0", filePath },
     ]);
 
     expect(bundle.css).toContain("color: red");

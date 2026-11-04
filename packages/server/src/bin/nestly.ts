@@ -33,13 +33,24 @@ export function run(
       });
       break;
 
+    case "build":
+      load(path.join(__dirname, "../build"))
+        .buildApp()
+        .then(() => console.log("Build complete"))
+        .catch((err: unknown) => {
+          console.error("Build failed:", err);
+          process.exit(1);
+        });
+      break;
+
     case "start":
-      console.error("nestly start is not implemented yet. Use `nestly dev`.");
-      process.exit(1);
+      load(path.join(__dirname, "../prodServer")).start({
+        port: port || 3000,
+      });
       break;
 
     default:
-      console.log("Usage: nestly dev [--port=PORT]");
+      console.log("Usage: nestly [dev|build|start] [--port=PORT]");
       process.exit(1);
   }
 }

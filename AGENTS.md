@@ -18,6 +18,8 @@ The project is early-stage. The development server is the only functional runtim
 Working:
 
 - `nestly dev` starts a clustered development server.
+- `nestly build` compiles app routes and client assets into `.nestly/`.
+- `nestly start` serves the production build with clustered SSR workers.
 - `GET` requests resolve to `page.tsx` files and render through React SSR.
 - Nested `layout.tsx` files are applied.
 - `"use client"` components render static markup and hydrate from one page bundle.
@@ -28,21 +30,20 @@ Working:
 - Static assets in `public/` are served by extension-addressed paths with `GET` and `HEAD`.
 - Query strings and fragments are ignored during route lookup.
 
-Incomplete or stale:
-
-- `nestly start` is not implemented. It exits with an error.
-- No static asset serving.
-- No production build pipeline for application routes.
-
 ## Architecture map
 
-- `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start` and supports `--port`. `start` is not implemented.
+- `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start`; `build` calls `buildApp`; `start` calls `prodServer.start`. Supports `--port` for dev and start.
 - `src/devServer.ts` — primary process forks one worker per CPU core. Each worker routes in this order: static asset, GET page, API handler, 404. Dead workers restart automatically.
-- `src/staticAssets.ts` — streams files from `process.cwd()/public`, maps extensions to content types, and rejects traversal and symlink escapes.
+- `src/staticAssets.ts` — streams files from `process.cwd()/public` and `.nestly/client`, maps extensions to content types, and rejects traversal and symlink escapes.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
 - `src/devSSRWorker.ts` — forks one child per URL path, passes route params, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
-- `src/devChildWorker.tsx` — renders the page with route params, applies layouts from the route directory, walks the element tree, wraps `"use client"` components, and emits SSR, CSS, and hydration HTML. Caches HTML, JavaScript, and CSS per child.
-- `src/bundler.ts` — bundles all client components on a page into a single esbuild bundle with shared dependencies once; `src/shim.ts` exposes React globals in the browser.
+- `src/renderer.tsx` — shared SSR helpers: client detection, layout discovery, element walking, client wrapping, hydration markup, and asset injection.
+- `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and inlines assets in development.
+- `src/bundler.ts` — bundles all client components on a page into a single dev bundle; `src/shim.ts` exposes React globals in the browser.
+- `src/build.ts` — production build: compiles route entries, emits hashed client bundles and CSS, writes `.nestly/manifest.json`.
+- `src/manifest.ts` — internal manifest types shared by build and runtime.
+- `src/prodRouter.ts` — matches URL paths against manifest route patterns with the same precedence as the dev resolver.
+- `src/prodServer.ts` — clustered production server: static assets, built client assets, SSR pages, API handlers, 404s.
 - `src/devAPIWorker.ts` — forks one child per `METHOD:URL`, watches the API file, and queues pending responses.
 - `src/devAPIChild.ts` — dynamically imports the API file and invokes the named HTTP method export with `method`, `url`, `headers`, `body`, and `params`. The handler must return `{ status, body }`.
 
@@ -52,6 +53,7 @@ Incomplete or stale:
 yarn install --frozen-lockfile
 yarn workspace @nestlyjs/server build
 PORT=4000 yarn workspace test-app dev
+PORT=4000 yarn workspace test-app start
 yarn workspace test-app test:routes
 yarn build
 yarn test
@@ -77,7 +79,7 @@ yarn changeset
 ## Known gaps and warnings
 
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
-- HMR and the production build are not implemented. See `docs/ROADMAP.md`.
+- HMR is not implemented. Production uses full page loads. See `docs/ROADMAP.md`.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
 - Worker failures are surfaced as generic 500 responses.
 
@@ -87,6 +89,6 @@ yarn changeset
 - Keep the CommonJS and `ts-node/register` development model unless the task explicitly changes it.
 - Do not add dependencies without a clear need.
 - Add a changeset when modifying `packages/server`.
-- Run the server build and a dev-server smoke test after behavior changes.
+- Run the server build, unit tests, and a dev-server smoke test after behavior changes. Run the production build/start suite for runtime changes.
 - Do not assume the production path works.
 - Prefer fixing the existing architecture over layering new abstractions on stale files.

@@ -327,7 +327,7 @@ import "./missing";`
       React.createElement(component, {})
     );
 
-    expect(wrapped.props["data-client-component"]).toBe(`${client.replace(/\//g, "-")}-0`);
+    expect(wrapped.props["data-client-component"]).toBe("client.tsx-0");
   });
 
   it("renders sync and async server components", async () => {

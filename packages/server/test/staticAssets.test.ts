@@ -7,6 +7,7 @@ import { Writable } from "stream";
 import { finished } from "stream/promises";
 import {
   isStaticAssetPath,
+  serveClientAsset,
   serveStaticAsset,
 } from "../src/staticAssets";
 
@@ -207,6 +208,27 @@ describe("serveStaticAsset", () => {
     );
     const res = await serve("/alias.txt");
     expect(res.body()).toBe("real");
+  });
+
+  it("serves built client assets with immutable caching", async () => {
+    write(".nestly/client/app-abc123.js", "console.log('app')");
+    const res = streamResponse();
+    serveClientAsset({ method: "GET" } as any, res as any, "app-abc123.js");
+    await finished(res);
+
+    expect(res.writeHead).toHaveBeenCalledWith(200, {
+      "Content-Type": "text/javascript; charset=utf-8",
+      "Content-Length": 18,
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+    expect(res.body()).toBe("console.log('app')");
+  });
+
+  it("returns 404 for a missing built client asset", () => {
+    write(".nestly/client/app-abc123.js", "x");
+    const res = response();
+    serveClientAsset({ method: "GET" } as any, res as any, "missing.js");
+    expect(res.writeHead).toHaveBeenCalledWith(404);
   });
 
   it("returns 500 when the stream fails before headers", () => {

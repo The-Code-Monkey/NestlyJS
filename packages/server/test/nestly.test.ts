@@ -73,10 +73,43 @@ describe("nestly cli", () => {
     expect(start).toHaveBeenCalledWith({ port: 3000 });
   });
 
-  it("reports that start is not implemented", () => {
-    run(["start"], vi.fn());
+  it("starts the production server", () => {
+    const start = vi.fn();
+    const load = vi.fn(() => ({ start }));
+
+    run(["start", "--port=7000"], load);
+
+    expect(load).toHaveBeenCalledWith(
+      path.resolve(__dirname, "../src/prodServer")
+    );
+    expect(start).toHaveBeenCalledWith({ port: 7000 });
+  });
+
+  it("starts the production server on the default port", () => {
+    const start = vi.fn();
+    run(["start"], () => ({ start }));
+    expect(start).toHaveBeenCalledWith({ port: 3000 });
+  });
+
+  it("builds the app", async () => {
+    const buildApp = vi.fn(async () => {});
+    const load = vi.fn(() => ({ buildApp }));
+
+    run(["build"], load);
+
+    expect(load).toHaveBeenCalledWith(path.resolve(__dirname, "../src/build"));
+    await vi.waitFor(() => expect(buildApp).toHaveBeenCalled());
+  });
+
+  it("exits when the build fails", async () => {
+    const buildApp = vi.fn(async () => {
+      throw new Error("boom");
+    });
+
+    run(["build"], () => ({ buildApp }));
+
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
     expect(error).toHaveBeenCalled();
-    expect(exit).toHaveBeenCalledWith(1);
   });
 
   it("prints usage for unknown commands", () => {

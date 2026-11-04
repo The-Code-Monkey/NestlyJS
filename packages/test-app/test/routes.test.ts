@@ -41,7 +41,14 @@ async function runTests() {
 
     const css = await request("/");
     if (!css.body.includes("color: rebeccapurple")) {
-      throw new Error("CSS bundle failed");
+      const stylesheet = css.body.match(
+        /href="(\/_nestly\/client\/[^"]+\.css)"/
+      );
+      if (!stylesheet) throw new Error("CSS bundle failed");
+      const asset = await request(stylesheet[1]);
+      if (!asset.body.includes("color: rebeccapurple")) {
+        throw new Error("CSS asset failed");
+      }
     }
 
     const apiPost = await request("/", "POST");
@@ -108,6 +115,19 @@ async function runTests() {
     const catchAllApi = await request("/files/a/b", "POST");
     if (!catchAllApi.body.includes('"path":["a","b"]')) {
       throw new Error("Catch-all API /files/[...path] failed");
+    }
+
+    const moduleScript = home.body.match(
+      /<script type="module" src="([^"]+)">/
+    );
+    if (moduleScript) {
+      const scriptAsset = await request(moduleScript[1]);
+      if (scriptAsset.statusCode !== 200) {
+        throw new Error("Client script asset failed");
+      }
+      if (!scriptAsset.headers["content-type"]?.includes("javascript")) {
+        throw new Error("Client script content type failed");
+      }
     }
 
     const staticFile = await request("/hello.txt");
