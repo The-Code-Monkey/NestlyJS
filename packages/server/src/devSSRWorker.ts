@@ -3,7 +3,7 @@ import http from "http";
 import { fork, ChildProcess } from "child_process";
 import fs from "fs";
 import path from "path";
-import { getRouteFiles, hasPageForGET } from "./routeResolver";
+import { resolveRoute } from "./routeResolver";
 import chokidar from "chokidar";
 
 const PAGE_CHILDREN: Map<string, ChildProcess> = new Map();
@@ -22,13 +22,13 @@ export async function devSSRHandler(
   const urlPath = req.url || "/";
   const method = req.method?.toUpperCase() || "GET";
 
-  if (method !== "GET" || !hasPageForGET(urlPath)) {
+  const route = method === "GET" ? resolveRoute(urlPath) : null;
+  if (!route || !fs.existsSync(route.pageFile)) {
     res.writeHead(404);
     res.end("Page not found");
     return;
   }
 
-  const { pageFile } = getRouteFiles(urlPath);
   const childPath = path.resolve(__dirname, "devChildWorker.js");
 
   // ----------------------------
@@ -80,5 +80,9 @@ export async function devSSRHandler(
   // Queue request and send to child
   // ----------------------------
   PENDING_REQUESTS.get(urlPath)!.push(res);
-  PAGE_CHILDREN.get(urlPath)!.send({ file: pageFile, url: urlPath });
+  PAGE_CHILDREN.get(urlPath)!.send({
+    file: route.pageFile,
+    url: urlPath,
+    params: route.params,
+  });
 }

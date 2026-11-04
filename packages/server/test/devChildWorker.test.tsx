@@ -135,6 +135,38 @@ export default function Page() {
     expect(html).not.toContain("<style>");
   });
 
+  it("passes route params to the page", async () => {
+    const pageFile = write(
+      "routes/[slug]/page.tsx",
+      `import React from "react";
+export default function Page({ params }: { params: { slug: string } }) {
+  return <h2>slug:{params.slug}</h2>;
+}`
+    );
+    const mod = await load();
+
+    const html = await mod.renderPage(pageFile, "/hello", { slug: "hello" });
+
+    expect(html).toContain("slug:hello");
+  });
+
+  it("passes catch-all params to the page", async () => {
+    const pageFile = write(
+      "routes/docs/[...slug]/page.tsx",
+      `import React from "react";
+export default function Page({ params }: { params: { slug: string[] } }) {
+  return <h2>docs:{params.slug.join("/")}</h2>;
+}`
+    );
+    const mod = await load();
+
+    const html = await mod.renderPage(pageFile, "/docs/a/b", {
+      slug: ["a", "b"],
+    });
+
+    expect(html).toContain("docs:a/b");
+  });
+
   it("returns an error page when rendering throws", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     write(
