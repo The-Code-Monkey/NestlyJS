@@ -52,6 +52,7 @@ PORT=4000 yarn workspace test-app dev
 yarn workspace test-app test:routes
 yarn build
 yarn test
+node scripts/check-pack.mjs
 yarn changeset
 ```
 
@@ -68,10 +69,10 @@ yarn changeset
 - Changes to `@nestlyjs/server` need a `.changeset` entry.
 - Renovate automerge is enabled.
 - Vitest with v8 coverage. Run `yarn test` from the repo root.
+- The server package ships only `dist/` and `tsconfig.devServer.json`. Verify with `node scripts/check-pack.mjs` after building.
 
 ## Known gaps and warnings
 
-- CI starts the dev server but never runs `test:routes`. Passing CI does not prove routing or API behavior.
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
 - Dynamic routes, HMR, static asset serving, and the production build are not implemented. See `docs/ROADMAP.md`.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
