@@ -1,17 +1,13 @@
 import React from "react";
-import ReactDOM from "react-dom/client";
-
-window.React = React;
-import React from "react";
-import ReactDOM from "react-dom/client";
+import * as ReactDOMClient from "react-dom/client";
 
 declare global {
   interface Window {
     React: typeof React;
     ReactDOMClient: typeof ReactDOMClient;
-    __components: Record<string, React.ComponentType<any>>;
+    __components: Record<string, { default: React.ComponentType<any> }>;
   }
 }
 
 window.React = React;
-window.ReactDOMClient = ReactDOM;
+window.ReactDOMClient = ReactDOMClient;

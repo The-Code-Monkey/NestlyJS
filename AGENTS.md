@@ -36,7 +36,8 @@ Incomplete or stale:
 - `src/devServer.ts` — primary process forks one worker per CPU core. Each worker routes in this order: GET page, API handler, 404. Dead workers restart automatically.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. A GET prefers `page.tsx` over `api.ts`.
 - `src/devSSRWorker.ts` — forks one child per URL path, registers `ts-node/register`, watches the page file with chokidar, and queues pending responses.
-- `src/devChildWorker.ts` — renders the page, applies layouts from the URL path, detects `"use client"`, and emits SSR or hydration HTML.
+- `src/devChildWorker.tsx` — renders the page, applies layouts from the URL path, detects `"use client"`, and emits SSR or hydration HTML.
+- `src/bundler.ts` — bundles client components with esbuild; `src/shim.ts` exposes React globals in the browser.
 - `src/devAPIWorker.ts` — forks one child per `METHOD:URL`, watches the API file, and queues pending responses.
 - `src/devAPIChild.ts` — dynamically imports the API file and invokes the named HTTP method export. The handler must return `{ status, body }`.
 
