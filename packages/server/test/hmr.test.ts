@@ -5,7 +5,11 @@ import path from "path";
 import { EventEmitter } from "events";
 
 const m = vi.hoisted(() => {
-  const state: any = { watch: vi.fn(), onChange: null as any };
+  const state: any = {
+    watch: vi.fn(),
+    onChange: null as any,
+    buildScript: vi.fn(),
+  };
   const watcher: any = {
     on: vi.fn((_event: string, cb: any) => {
       state.onChange = cb;
@@ -17,6 +21,9 @@ const m = vi.hoisted(() => {
 });
 
 vi.mock("chokidar", () => ({ default: { watch: m.watch } }));
+vi.mock("../src/devRefresh", () => ({
+  buildClientScriptForUrl: m.buildScript,
+}));
 
 import {
   HMR_PATH,
@@ -35,6 +42,7 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "nestly-hmr-"));
   process.chdir(root);
   vi.clearAllMocks();
+  m.buildScript.mockResolvedValue("window.__updated = true;");
 });
 
 afterEach(() => {
@@ -187,11 +195,44 @@ describe("handleChange", () => {
     });
   });
 
-  it("reloads for public asset changes", () => {
+  it("reloads for public asset changes", async () => {
     const { req, res } = connection();
     hmrHandler(req, res);
 
-    handleChange(path.join(root, "public", "style.css"));
+    await handleChange(path.join(root, "public", "style.css"));
+
+    expect(messages(res)[0].type).toBe("reload");
+  });
+
+  it("refreshes client component changes", async () => {
+    const { req, res } = connection();
+    hmrHandler(req, res);
+
+    await handleChange(path.join(root, "routes", "button.tsx"));
+
+    expect(m.buildScript).toHaveBeenCalledWith("/");
+    expect(messages(res)[0]).toEqual({
+      type: "refresh",
+      code: "window.__updated = true;",
+    });
+  });
+
+  it("reloads when no client bundle exists", async () => {
+    m.buildScript.mockResolvedValue("");
+    const { req, res } = connection();
+    hmrHandler(req, res);
+
+    await handleChange(path.join(root, "routes", "button.tsx"));
+
+    expect(messages(res)[0].type).toBe("reload");
+  });
+
+  it("reloads when rebuilding the client bundle fails", async () => {
+    m.buildScript.mockRejectedValue(new Error("boom"));
+    const { req, res } = connection();
+    hmrHandler(req, res);
+
+    await handleChange(path.join(root, "routes", "button.tsx"));
 
     expect(messages(res)[0].type).toBe("reload");
   });
@@ -218,5 +259,6 @@ describe("startHmrWatcher", () => {
 
     expect(messages(res)[0].type).toBe("reload");
     expect(hmrClientScript).toContain(HMR_PATH);
+    expect(hmrClientScript).toContain("performReactRefresh");
   });
 });

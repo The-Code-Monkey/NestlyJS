@@ -29,9 +29,28 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@babel/core": "^8.1.0",
     "chokidar": "6.0.0",
     "esbuild": "^0.28.0",
+    "react-refresh": "^0.19.0",
     "ts-node": "10.9.2",
     "typescript": "5.9.3"
-  }
+  },
+  "description": "File-based full-stack React framework runtime and CLI",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/The-Code-Monkey/NestlyJS.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/The-Code-Monkey/NestlyJS#readme",
+  "bugs": {
+    "url": "https://github.com/The-Code-Monkey/NestlyJS/issues"
+  },
+  "keywords": [
+    "react",
+    "ssr",
+    "framework",
+    "file-based-routing",
+    "full-stack"
+  ]
 }

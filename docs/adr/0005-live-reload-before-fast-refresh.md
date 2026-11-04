@@ -1,3 +1,5 @@
+Status: superseded by ADR 0006.
+
 # Live reload before React Fast Refresh
 
 The first HMR slice adds an SSE endpoint, automatic full-page reloads for route, API, and public asset changes, and CSS hot swap for stylesheets under `routes/`. React Fast Refresh is deferred.

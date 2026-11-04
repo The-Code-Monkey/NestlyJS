@@ -22,7 +22,11 @@ function write(name: string, contents: string) {
 
 describe("bundlePageClient", () => {
   it("returns empty output for no components", async () => {
-    await expect(bundlePageClient([])).resolves.toEqual({ js: "", css: "" });
+    await expect(bundlePageClient([])).resolves.toEqual({
+      js: "",
+      css: "",
+      runtime: "",
+    });
   });
 
   it("bundles a client component", async () => {
@@ -62,5 +66,6 @@ export default function Styled() {
 
     expect(bundle.css).toContain("color: red");
     expect(bundle.js).toContain("styled-0");
+    expect(bundle.runtime).toContain("ReactJSXRuntime");
   });
 });
