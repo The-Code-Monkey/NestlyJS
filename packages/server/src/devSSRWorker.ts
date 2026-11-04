@@ -9,6 +9,12 @@ import chokidar from "chokidar";
 const PAGE_CHILDREN: Map<string, ChildProcess> = new Map();
 const PENDING_REQUESTS: Map<string, http.ServerResponse[]> = new Map();
 
+// Full reload: any route file change restarts page children, invalidating caches.
+const ROUTES_DIR = path.join(process.cwd(), "routes");
+chokidar.watch(ROUTES_DIR, { ignoreInitial: true }).on("all", () => {
+  for (const child of PAGE_CHILDREN.values()) child.kill();
+});
+
 export async function devSSRHandler(
   req: http.IncomingMessage,
   res: http.ServerResponse
@@ -43,13 +49,6 @@ export async function devSSRHandler(
 
     PAGE_CHILDREN.set(urlPath, child);
     PENDING_REQUESTS.set(urlPath, []);
-
-    // Watch page for hot reload
-    chokidar.watch(pageFile).on("change", () => {
-      console.log(`[SSR WORKER] Hot reload triggered for ${pageFile}`);
-      child.kill();
-      PAGE_CHILDREN.delete(urlPath);
-    });
 
     child.on("message", (msg: any) => {
       if (msg.type === "render" && msg.url) {

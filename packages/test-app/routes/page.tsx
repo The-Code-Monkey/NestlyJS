@@ -1,7 +1,12 @@
 import React from "react";
+import Button from "./button";
 
 export default function Home() {
   return (
-    <h2>Welcome to the Test App!</h2>
+    <div>
+      <h2>Welcome to the Test App!</h2>
+      <Button label="Alpha" />
+      <Button label="Beta" />
+    </div>
   );
 }
