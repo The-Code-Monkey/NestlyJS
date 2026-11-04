@@ -20,24 +20,26 @@ Working:
 - `nestly dev` starts a clustered development server.
 - `GET` requests resolve to `page.tsx` files and render through React SSR.
 - Nested `layout.tsx` files are applied.
-- `"use client"` components render static markup and include an inline hydration script.
+- `"use client"` components render static markup and hydrate from one page bundle.
+- Plain CSS imports from pages, layouts, and client components are inlined per page.
+- Pages cache HTML, JavaScript, and CSS until a file under `routes/` changes.
 - Non-GET API requests resolve to named method exports in `api.ts`.
+- Query strings and fragments are ignored during route lookup.
 
 Incomplete or stale:
 
-- `nestly start` is incomplete. `src/prodServer.ts` requires `prodAPIWorker.ts` and `prodSSRWorker.ts`, which do not exist.
-- `src/apiWorker.ts`, `src/ssrWorker.ts`, `src/childWorker.ts`, `src/apiChild.ts`, `src/renderer.ts`, `src/devRenderer.ts`, and `src/client.tsx` are stale or unwired. Treat them as historical examples, not the live architecture.
+- `nestly start` is not implemented. It exits with an error.
 - No static asset serving.
 - No production build pipeline for application routes.
 
 ## Architecture map
 
-- `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start`; `start` calls `prodServer.start`. Supports `--port` and `--workers`.
+- `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start` and supports `--port`. `start` is not implemented.
 - `src/devServer.ts` — primary process forks one worker per CPU core. Each worker routes in this order: GET page, API handler, 404. Dead workers restart automatically.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. A GET prefers `page.tsx` over `api.ts`.
-- `src/devSSRWorker.ts` — forks one child per URL path, registers `ts-node/register`, watches the page file with chokidar, and queues pending responses.
-- `src/devChildWorker.tsx` — renders the page, applies layouts from the URL path, detects `"use client"`, and emits SSR or hydration HTML.
-- `src/bundler.ts` — bundles client components with esbuild; `src/shim.ts` exposes React globals in the browser.
+- `src/devSSRWorker.ts` — forks one child per URL path, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
+- `src/devChildWorker.tsx` — renders the page, applies layouts from the URL path, walks the element tree, wraps `"use client"` components, and emits SSR, CSS, and hydration HTML. Caches HTML, JavaScript, and CSS per child.
+- `src/bundler.ts` — bundles all client components on a page into a single esbuild bundle with shared dependencies once; `src/shim.ts` exposes React globals in the browser.
 - `src/devAPIWorker.ts` — forks one child per `METHOD:URL`, watches the API file, and queues pending responses.
 - `src/devAPIChild.ts` — dynamically imports the API file and invokes the named HTTP method export. The handler must return `{ status, body }`.
 
@@ -49,6 +51,7 @@ yarn workspace @nestlyjs/server build
 PORT=4000 yarn workspace test-app dev
 yarn workspace test-app test:routes
 yarn build
+yarn test
 yarn changeset
 ```
 
@@ -64,14 +67,13 @@ yarn changeset
 - API routes use named exports matching HTTP methods, such as `GET`, `POST`, `PUT`.
 - Changes to `@nestlyjs/server` need a `.changeset` entry.
 - Renovate automerge is enabled.
-- No lint, formatter, or test framework is configured.
+- Vitest with v8 coverage. Run `yarn test` from the repo root.
 
 ## Known gaps and warnings
 
-- `packages/test-app/routes/api.ts` calls `res.json(...)` and returns nothing. The runtime expects handlers to return `{ status, body }`. These handlers are incompatible with the current API worker.
-- `packages/test-app/test/routes.test.ts` expects `/about` and `/contact` routes that do not exist.
 - CI starts the dev server but never runs `test:routes`. Passing CI does not prove routing or API behavior.
-- Query strings are not stripped from `req.url`, so route lookup can fail for URLs like `/page?x=1`.
+- Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
+- Dynamic routes, HMR, static asset serving, and the production build are not implemented. See `docs/ROADMAP.md`.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
 - Worker failures are surfaced as generic 500 responses.
 

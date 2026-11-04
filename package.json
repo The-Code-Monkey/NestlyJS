@@ -17,11 +17,18 @@
     "packages/*"
   ],
   "devDependencies": {
-    "@changesets/cli": "2.31.1"
+    "@changesets/cli": "2.31.1",
+    "@vitest/coverage-v8": "^5.1.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
   },
   "scripts": {
     "changeset": "changeset",
-    "build": "yarn workspaces run build"
+    "build": "yarn workspaces run build",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
   },
   "packageManager": "yarn@1.22.22"
 }

@@ -7,18 +7,21 @@
     "nestly": "dist/bin/nestly.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x ./dist/bin/nestly.js"
+    "build": "tsc && chmod +x ./dist/bin/nestly.js",
+    "test": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0"
   },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
   "dependencies": {
     "chokidar": "6.0.0",
     "esbuild": "^0.28.0",
-    "react": "19.3.1",
-    "react-dom": "19.3.1",
     "ts-node": "10.9.2",
     "typescript": "5.9.3"
   }

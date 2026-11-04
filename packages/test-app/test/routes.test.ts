@@ -9,7 +9,9 @@ async function request(path: string, method: string = "GET") {
       (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => resolve({ statusCode: res.statusCode || 0, body: data }));
+        res.on("end", () =>
+          resolve({ statusCode: res.statusCode || 0, body: data })
+        );
       }
     );
     req.on("error", reject);
@@ -19,18 +21,33 @@ async function request(path: string, method: string = "GET") {
 
 async function runTests() {
   try {
-    // Test SSR page
     const home = await request("/");
-    if (!home.body.includes("<h1>")) throw new Error("SSR / failed");
+    if (!home.body.includes("Welcome to the Test App!")) {
+      throw new Error("SSR / failed");
+    }
 
-    const about = await request("/about");
-    if (!about.body.includes("<h1>About")) throw new Error("SSR /about failed");
+    const withQuery = await request("/?x=1");
+    if (!withQuery.body.includes("Welcome to the Test App!")) {
+      throw new Error("SSR /?x=1 failed");
+    }
 
-    // Test API routes
-    const apiGet = await request("/contact", "GET");
-    const apiPost = await request("/contact", "POST");
-    if (!apiGet.body.includes("Contact GET")) throw new Error("API GET /contact failed");
-    if (!apiPost.body.includes("POST")) throw new Error("API POST /contact failed");
+    const css = await request("/");
+    if (!css.body.includes("color: rebeccapurple")) {
+      throw new Error("CSS bundle failed");
+    }
+
+    const apiPost = await request("/", "POST");
+    if (!apiPost.body.includes("POST received")) {
+      throw new Error("API POST / failed");
+    }
+
+    const apiPut = await request("/", "PUT");
+    if (!apiPut.body.includes("PUT received")) {
+      throw new Error("API PUT / failed");
+    }
+
+    const missing = await request("/missing");
+    if (missing.statusCode !== 404) throw new Error("404 /missing failed");
 
     console.log("All tests passed ✅");
     process.exit(0);

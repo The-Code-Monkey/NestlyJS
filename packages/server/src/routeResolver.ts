@@ -12,7 +12,12 @@ export interface RouteFiles {
  * Root path "/" resolves directly to routes folder.
  */
 export function getRouteFiles(urlPath: string): RouteFiles {
-  const routeDir = path.join(process.cwd(), "routes", urlPath === "/" ? "" : urlPath.slice(1));
+  const cleanPath = urlPath.split(/[?#]/)[0] || "/";
+  const routeDir = path.join(
+    process.cwd(),
+    "routes",
+    cleanPath === "/" ? "" : cleanPath.slice(1)
+  );
 
   const pageFile = path.join(routeDir, "page.tsx");
   const apiFile = path.join(routeDir, "api.ts");
