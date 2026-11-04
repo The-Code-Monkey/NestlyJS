@@ -16,10 +16,11 @@
 - HTML, JavaScript, and CSS cached per page; any route file change triggers a full reload.
 - API handlers return `{ status, body }` with a JSON body.
 - Query strings and fragments are ignored during route lookup.
+- Development live reload over SSE and CSS hot swap without a page reload.
 
 ## Version 2
 
-- Hot module replacement (HMR). Version 1 uses full page reloads.
+- React Fast Refresh for client components, preserving component state.
 
 ## Deferred
 

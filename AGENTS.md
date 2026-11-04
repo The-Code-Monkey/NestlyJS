@@ -29,6 +29,7 @@ Working:
 - Dynamic routes (`[param]`, `[...param]`, `[[...param]]`) capture route params; route groups `(name)` group files without affecting the URL.
 - Static assets in `public/` are served by extension-addressed paths with `GET` and `HEAD`.
 - Query strings and fragments are ignored during route lookup.
+- Dev changes trigger live reload over SSE; route CSS changes hot swap without reload.
 
 ## Architecture map
 
@@ -38,7 +39,8 @@ Working:
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
 - `src/devSSRWorker.ts` — forks one child per URL path, passes route params, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
 - `src/renderer.tsx` — shared SSR helpers: client detection, layout discovery, element walking, client wrapping, hydration markup, and asset injection.
-- `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and inlines assets in development.
+- `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and inlines assets and the HMR client in development.
+- `src/hmr.ts` — dev SSE endpoint, file watcher, live reload broadcast, and CSS hot-swap payloads.
 - `src/bundler.ts` — bundles all client components on a page into a single dev bundle; `src/shim.ts` exposes React globals in the browser.
 - `src/build.ts` — production build: compiles route entries, emits hashed client bundles and CSS, writes `.nestly/manifest.json`.
 - `src/manifest.ts` — internal manifest types shared by build and runtime.
@@ -79,7 +81,7 @@ yarn changeset
 ## Known gaps and warnings
 
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
-- HMR is not implemented. Production uses full page loads. See `docs/ROADMAP.md`.
+- React Fast Refresh is not implemented. Dev uses live reload plus CSS hot swap. See `docs/ROADMAP.md`.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
 - Worker failures are surfaced as generic 500 responses.
 

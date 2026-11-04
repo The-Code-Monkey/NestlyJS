@@ -3,6 +3,7 @@ import React from "react";
 import fs from "fs";
 import path from "path";
 import { bundlePageClient } from "./bundler";
+import { hmrClientScript } from "./hmr";
 import {
   attachFilePaths,
   collectCss,
@@ -106,15 +107,15 @@ export async function renderPage(
 
     finalHTML = injectHead(
       finalHTML,
-      cachedStyle ? `<style>${cachedStyle}</style>` : ""
+      cachedStyle ? `<style data-nestly-style>${cachedStyle}</style>` : ""
     );
 
-    if (bundle.js) {
-      const scripts =
-        `<script type="module">${bundle.js}</script>` +
-        hydrationScript(instances);
-      finalHTML = injectBody(finalHTML, scripts);
-    }
+    const scripts =
+      (bundle.js
+        ? `<script type="module">${bundle.js}</script>` +
+          hydrationScript(instances)
+        : "") + hmrClientScript;
+    finalHTML = injectBody(finalHTML, scripts);
 
     cachedHtml = finalHTML;
     console.log(`[CHILD ${process.pid}] Rendered page for ${url}`);

@@ -6,6 +6,7 @@ import { devSSRHandler } from "./devSSRWorker";
 import { devAPIHandler } from "./devAPIWorker";
 import { hasPageForGET, getAPIMethod } from "./routeResolver";
 import { isStaticAssetPath, serveStaticAsset } from "./staticAssets";
+import { HMR_PATH, hmrHandler, startHmrWatcher } from "./hmr";
 
 export function start({
   port = 3000,
@@ -26,11 +27,22 @@ export function start({
       cluster.fork({ PORT: port.toString() });
     });
   } else {
+    startHmrWatcher();
+
     const server = http.createServer(async (req, res) => {
       const urlPath = req.url || "/";
       const method = (req.method || "GET").toUpperCase();
 
       try {
+        // 0️⃣ Dev live-reload event stream
+        if (
+          method === "GET" &&
+          urlPath.split("?")[0] === HMR_PATH
+        ) {
+          hmrHandler(req, res);
+          return;
+        }
+
         // 1️⃣ Static file paths always resolve against public/
         if (
           (method === "GET" || method === "HEAD") &&

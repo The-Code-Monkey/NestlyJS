@@ -73,6 +73,8 @@ describe("devChildWorker", () => {
     expect(html).toContain("color: red");
     expect(html.match(/<script type="module">/g)).toHaveLength(1);
     expect(html.match(/data-client-component/g)).toHaveLength(2);
+    expect(html).toContain("data-nestly-style");
+    expect(html).toContain("/_nestly/hmr");
 
     await expect(mod.renderPage(pageFile, "/")).resolves.toBe(html);
   });
@@ -108,7 +110,7 @@ export default async function Page() {
 
     expect(html).toContain("later");
     expect(html).toContain("async");
-    expect(html.indexOf("<style>")).toBe(0);
+    expect(html.startsWith("<style data-nestly-style>")).toBe(true);
     expect(html).not.toContain("<script type=\"module\">");
   });
 
@@ -132,7 +134,7 @@ export default function Page() {
     const html = await mod.renderPage(pageFile, "/");
 
     expect(html).toContain("plain");
-    expect(html).not.toContain("<style>");
+    expect(html).not.toContain("<style");
   });
 
   it("passes route params to the page", async () => {
