@@ -24,6 +24,8 @@ const files = new Set(result.files.map((entry) => entry.path));
 
 const required = [
   "package.json",
+  "README.md",
+  "LICENSE",
   "tsconfig.devServer.json",
   "dist/bin/nestly.js",
   "dist/build.js",
@@ -33,6 +35,7 @@ const required = [
   "dist/devChildWorker.js",
   "dist/devServer.js",
   "dist/devSSRWorker.js",
+  "dist/devRefresh.js",
   "dist/hmr.js",
   "dist/manifest.js",
   "dist/prodRouter.js",

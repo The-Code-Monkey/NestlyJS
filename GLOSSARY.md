@@ -64,6 +64,10 @@ _Avoid_: HMR, hot reload
 Replacing the active stylesheet in place without reloading the page.
 _Avoid_: Style HMR, CSS injection
 
+**Fast Refresh**:
+A development update that replaces changed client components while preserving their React state.
+_Avoid_: Hot reload, live reload
+
 **Layout**:
 A React wrapper declared by `layout.tsx` in a route directory. Layouts apply to pages in that directory and its descendants.
 _Avoid_: Shell, template

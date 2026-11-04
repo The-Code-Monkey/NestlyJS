@@ -4,6 +4,7 @@ import chokidar from "chokidar";
 import type { IncomingMessage, ServerResponse } from "http";
 import { resolveRoute } from "./routeResolver";
 import { collectCss, findLayoutComponents } from "./renderer";
+import { buildClientScriptForUrl } from "./devRefresh";
 
 export const HMR_PATH = "/_nestly/hmr";
 
@@ -22,6 +23,16 @@ export const hmrClientScript = `
           const message = JSON.parse(event.data);
           if (message.type === "reload") {
             location.reload();
+          } else if (message.type === "refresh") {
+            try {
+              new Function(message.code)();
+              if (window.__NESTLY_REFRESH__) {
+                window.__NESTLY_REFRESH__.performReactRefresh();
+              }
+            } catch (error) {
+              console.error("Fast Refresh failed", error);
+              location.reload();
+            }
           } else if (message.type === "css") {
             let style = document.querySelector("style[data-nestly-style]");
             if (!style) {
@@ -98,13 +109,42 @@ function broadcastReload(filePath: string) {
   }
 }
 
-export function handleChange(filePath: string) {
-  const routesDir = path.join(process.cwd(), "routes");
-  if (filePath.endsWith(".css") && filePath.startsWith(routesDir + path.sep)) {
-    void broadcastCss();
-  } else {
-    broadcastReload(filePath);
+function reload(res: ServerResponse, filePath: string) {
+  send(res, { type: "reload", path: filePath });
+}
+
+const SERVER_FILES = new Set(["page.tsx", "layout.tsx", "api.ts"]);
+
+async function broadcastRefresh(filePath: string) {
+  for (const [res, urlPath] of clients) {
+    try {
+      const code = await buildClientScriptForUrl(urlPath);
+      if (code) send(res, { type: "refresh", code });
+      else reload(res, filePath);
+    } catch {
+      reload(res, filePath);
+    }
   }
+}
+
+export async function handleChange(filePath: string) {
+  const routesDir = path.join(process.cwd(), "routes");
+  const publicDir = path.join(process.cwd(), "public");
+
+  if (filePath.endsWith(".css") && filePath.startsWith(routesDir + path.sep)) {
+    await broadcastCss();
+    return;
+  }
+
+  if (
+    filePath.startsWith(publicDir + path.sep) ||
+    SERVER_FILES.has(path.basename(filePath))
+  ) {
+    broadcastReload(filePath);
+    return;
+  }
+
+  await broadcastRefresh(filePath);
 }
 
 export function startHmrWatcher() {
@@ -120,6 +160,6 @@ export function startHmrWatcher() {
       { ignoreInitial: true }
     )
     .on("all", (_event, filePath) => {
-      if (filePath) handleChange(filePath);
+      if (filePath) void handleChange(filePath);
     });
 }

@@ -112,7 +112,7 @@ export async function renderPage(
 
     const scripts =
       (bundle.js
-        ? `<script type="module">${bundle.js}</script>` +
+        ? `<script type="module">${bundle.runtime}${bundle.js}</script>` +
           hydrationScript(instances)
         : "") + hmrClientScript;
     finalHTML = injectBody(finalHTML, scripts);

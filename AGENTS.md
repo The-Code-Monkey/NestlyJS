@@ -30,6 +30,7 @@ Working:
 - Static assets in `public/` are served by extension-addressed paths with `GET` and `HEAD`.
 - Query strings and fragments are ignored during route lookup.
 - Dev changes trigger live reload over SSE; route CSS changes hot swap without reload.
+- Client component changes Fast Refresh while preserving React state.
 
 ## Architecture map
 
@@ -40,7 +41,8 @@ Working:
 - `src/devSSRWorker.ts` — forks one child per URL path, passes route params, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
 - `src/renderer.tsx` — shared SSR helpers: client detection, layout discovery, element walking, client wrapping, hydration markup, and asset injection.
 - `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and inlines assets and the HMR client in development.
-- `src/hmr.ts` — dev SSE endpoint, file watcher, live reload broadcast, and CSS hot-swap payloads.
+- `src/hmr.ts` — dev SSE endpoint, file watcher, live reload, CSS hot-swap, and Fast Refresh payloads.
+- `src/devRefresh.ts` — dev bundler plugins: esbuild global React mapping, `react-refresh` Babel transforms, runtime preamble, and page client bundles.
 - `src/bundler.ts` — bundles all client components on a page into a single dev bundle; `src/shim.ts` exposes React globals in the browser.
 - `src/build.ts` — production build: compiles route entries, emits hashed client bundles and CSS, writes `.nestly/manifest.json`.
 - `src/manifest.ts` — internal manifest types shared by build and runtime.
@@ -81,7 +83,7 @@ yarn changeset
 ## Known gaps and warnings
 
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
-- React Fast Refresh is not implemented. Dev uses live reload plus CSS hot swap. See `docs/ROADMAP.md`.
+- Fast Refresh applies to client components. Page, layout, API, and public asset changes still reload. State resets when hook order changes.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
 - Worker failures are surfaced as generic 500 responses.
 
