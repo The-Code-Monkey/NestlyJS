@@ -30,6 +30,9 @@ jobs:
       - name: Check package contents
         run: node scripts/check-pack.mjs
 
+      - name: Check installed package
+        run: node scripts/check-install.mjs
+
       - name: Run route integration tests
         run: |
           set -euo pipefail

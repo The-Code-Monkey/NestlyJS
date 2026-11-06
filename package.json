@@ -29,7 +29,8 @@
     "changeset": "changeset",
     "build": "yarn workspaces run build",
     "test": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:install": "node scripts/check-install.mjs"
   },
   "packageManager": "yarn@1.22.22"
 }
