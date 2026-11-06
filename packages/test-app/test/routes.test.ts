@@ -2,14 +2,24 @@ import http from "http";
 
 const PORT = 4000; // dev server port for testing
 
-async function request(path: string, method: string = "GET") {
+async function request(
+  path: string,
+  method: string = "GET",
+  body?: string
+) {
   return new Promise<{
     statusCode: number;
     body: string;
     headers: http.IncomingHttpHeaders;
   }>((resolve, reject) => {
     const req = http.request(
-      { hostname: "localhost", port: PORT, path, method },
+      {
+        hostname: "localhost",
+        port: PORT,
+        path,
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+      },
       (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
@@ -23,7 +33,7 @@ async function request(path: string, method: string = "GET") {
       }
     );
     req.on("error", reject);
-    req.end();
+    req.end(body);
   });
 }
 
@@ -54,6 +64,16 @@ async function runTests() {
     const apiPost = await request("/", "POST");
     if (!apiPost.body.includes("POST received")) {
       throw new Error("API POST / failed");
+    }
+
+    const apiBody = await request("/", "POST", '{"value":1}');
+    if (!apiBody.body.includes('"value":1')) {
+      throw new Error("API POST body parsing failed");
+    }
+
+    const apiInvalid = await request("/", "POST", "{");
+    if (apiInvalid.statusCode !== 400) {
+      throw new Error("API invalid JSON must return 400");
     }
 
     const apiPut = await request("/", "PUT");

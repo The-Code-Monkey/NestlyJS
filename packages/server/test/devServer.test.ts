@@ -5,7 +5,7 @@ const m = vi.hoisted(() => ({
   fork: vi.fn(),
   on: vi.fn(),
   createServer: vi.fn(),
-  listen: vi.fn((port: number, cb?: () => void) => cb?.()),
+  listen: vi.fn((_port: number, _host?: string, cb?: () => void) => cb?.()),
   cpus: vi.fn(() => [{}, {}]),
   hasPage: vi.fn(),
   getAPI: vi.fn(),
@@ -107,6 +107,17 @@ describe("devServer", () => {
     expect(m.ssr).not.toHaveBeenCalled();
   });
 
+  it("listens on the configured host", async () => {
+    m.state.isPrimary = false;
+    start({ port: 3000, host: "127.0.0.1" });
+
+    expect(m.listen).toHaveBeenCalledWith(
+      3000,
+      "127.0.0.1",
+      expect.any(Function)
+    );
+  });
+
   it("serves static asset paths before routes", async () => {
     m.state.isPrimary = false;
     start({ port: 3000 });
@@ -145,7 +156,11 @@ describe("devServer", () => {
     await handler({ url: "/", method: "GET" }, res);
 
     expect(m.ssr).toHaveBeenCalledWith({ url: "/", method: "GET" }, res);
-    expect(m.listen).toHaveBeenCalledWith(3000, expect.any(Function));
+    expect(m.listen).toHaveBeenCalledWith(
+      3000,
+      undefined,
+      expect.any(Function)
+    );
   });
 
   it("routes an API request to the API handler", async () => {

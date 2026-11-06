@@ -16,6 +16,8 @@ import {
   renderPageTree,
 } from "./renderer";
 import type { Manifest } from "./manifest";
+import { HtmlCache } from "./htmlCache";
+import { RequestBodyError, readRequestBody } from "./requestBody";
 
 const CLIENT_PREFIX = "/_nestly/client/";
 
@@ -38,7 +40,8 @@ export async function handleRequest(
   res: http.ServerResponse,
   manifest: Manifest,
   outDir: string,
-  loadModule: ModuleLoader
+  loadModule: ModuleLoader,
+  htmlCache = new HtmlCache(0)
 ) {
   const urlPath = req.url || "/";
   const method = (req.method || "GET").toUpperCase();
@@ -63,6 +66,17 @@ export async function handleRequest(
     const matched = matchManifestRoute(manifest, urlPath);
 
     if (method === "GET" && matched?.route.page) {
+      const cacheKey = urlPath.split(/[?#]/)[0] || "/";
+      const cached = htmlCache.get(cacheKey);
+      if (cached !== undefined) {
+        res.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        res.end(cached);
+        return;
+      }
+
       const serverModule = loadModule(
         path.join(outDir, matched.route.page.entry)
       );
@@ -86,6 +100,7 @@ export async function handleRequest(
         document = injectBody(document, scripts);
       }
 
+      htmlCache.set(cacheKey, document);
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
@@ -101,11 +116,12 @@ export async function handleRequest(
       const handler = apiModule[method];
 
       if (typeof handler === "function") {
+        const body = await readRequestBody(req);
         const result = await handler({
           method,
           url: urlPath,
           headers: req.headers,
-          body: undefined,
+          body,
           params: matched.params,
         });
         if (!result) throw new Error("API handler did not return a result");
@@ -121,6 +137,11 @@ export async function handleRequest(
     res.writeHead(404);
     res.end(method === "GET" ? "Page not found" : "API route not found");
   } catch (err) {
+    if (err instanceof RequestBodyError) {
+      res.writeHead(err.status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
     console.error(`[PROD WORKER ${process.pid}] Error handling request:`, err);
     res.writeHead(500);
     res.end("Internal server error");
@@ -129,8 +150,9 @@ export async function handleRequest(
 
 export function start({
   port = 3000,
+  host,
   totalWorkers,
-}: { port?: number; totalWorkers?: number } = {}) {
+}: { port?: number; host?: string; totalWorkers?: number } = {}) {
   const numWorkers = totalWorkers || os.cpus().length;
 
   if (cluster.isPrimary) {
@@ -146,6 +168,17 @@ export function start({
       );
       cluster.fork({ PORT: port.toString() });
     });
+
+    let shuttingDown = false;
+    const shutdown = () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      cluster.removeAllListeners("exit");
+      cluster.disconnect(() => process.exit(0));
+      setTimeout(() => process.exit(1), 5000).unref();
+    };
+    process.once("SIGTERM", shutdown);
+    process.once("SIGINT", shutdown);
     return;
   }
 
@@ -161,14 +194,31 @@ export function start({
     return;
   }
   const loadModule = createModuleLoader();
+  const cacheSize = Number.parseInt(
+    process.env.NESTLY_HTML_CACHE_SIZE ?? "100",
+    10
+  );
+  const htmlCache = new HtmlCache(
+    Number.isFinite(cacheSize) ? cacheSize : 100
+  );
 
   const server = http.createServer((req, res) => {
-    void handleRequest(req, res, manifest, outDir, loadModule);
+    void handleRequest(req, res, manifest, outDir, loadModule, htmlCache);
   });
 
-  server.listen(port, () => {
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 5000).unref();
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+
+  server.listen(port, host, () => {
     console.log(
-      `[PROD WORKER ${process.pid}] Listening on http://localhost:${port}`
+      `[PROD WORKER ${process.pid}] Listening on http://${host || "localhost"}:${port}`
     );
   });
 }

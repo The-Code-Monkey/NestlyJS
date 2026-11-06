@@ -34,11 +34,11 @@ nestly build
 nestly start [--port=3000]
 ```
 
-`PORT` is used when `--port` is not provided.
+`PORT` is used when `--port` is not provided. `--host` or `HOST` binds a specific interface.
 
 - `dev` starts the clustered development server with live reload, CSS hot swap, and React Fast Refresh.
 - `build` writes the production output to `.nestly/`.
-- `start` serves the production build and requires a prior build.
+- `start` serves the production build and requires a prior build. Set `NESTLY_HTML_CACHE_SIZE` to change the page HTML cache size (`0` disables).
 
 Static files live in `public/` and are served by extension-addressed paths.
 

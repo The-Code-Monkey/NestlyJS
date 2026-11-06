@@ -14,6 +14,7 @@ const m = vi.hoisted(() => {
       },
     })),
     exists: vi.fn(() => true),
+    readBody: vi.fn(),
   };
 
   state.watch = vi.fn((_file: string, cb: any) => {
@@ -44,8 +45,13 @@ vi.mock("fs", () => ({
 vi.mock("../src/routeResolver", () => ({
   getAPIRoute: m.getAPIRoute,
 }));
+vi.mock("../src/requestBody", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/requestBody")>();
+  return { ...actual, readRequestBody: m.readBody };
+});
 
 import { devAPIHandler } from "../src/devAPIWorker";
+import { RequestBodyError } from "../src/requestBody";
 
 function response() {
   return { writeHead: vi.fn(), end: vi.fn() };
@@ -59,6 +65,7 @@ function nextUrl() {
 describe("devAPIHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    m.readBody.mockResolvedValue({ ok: true });
     m.children.length = 0;
     m.getAPIRoute.mockReturnValue({
       handler: () => {},
@@ -102,6 +109,8 @@ describe("devAPIHandler", () => {
       file: "/tmp/api.ts",
       method: "POST",
       url,
+      headers: undefined,
+      body: { ok: true },
       params: { slug: "hello" },
     });
 
@@ -159,6 +168,34 @@ describe("devAPIHandler", () => {
 
     expect(m.fork).toHaveBeenCalledTimes(1);
     expect(child.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a body parsing error", async () => {
+    m.readBody.mockRejectedValue(
+      new RequestBodyError(400, "Invalid JSON")
+    );
+    const res = response();
+
+    await devAPIHandler(
+      { url: nextUrl(), method: "POST" } as any,
+      res as any
+    );
+
+    expect(res.writeHead).toHaveBeenCalledWith(400, {
+      "Content-Type": "application/json",
+    });
+    expect(res.end).toHaveBeenCalledWith('{"error":"Invalid JSON"}');
+  });
+
+  it("rethrows unexpected body errors", async () => {
+    m.readBody.mockRejectedValue(new Error("boom"));
+
+    await expect(
+      devAPIHandler(
+        { url: nextUrl(), method: "POST" } as any,
+        response() as any
+      )
+    ).rejects.toThrow("boom");
   });
 
   it("kills the child when the API file changes", async () => {

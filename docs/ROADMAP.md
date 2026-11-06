@@ -14,7 +14,8 @@
 - Production build into `.nestly/` with hashed client assets and shared chunks.
 - `nestly start` serves production pages, APIs, static files, and built assets.
 - HTML, JavaScript, and CSS cached per page; any route file change triggers a full reload.
-- API handlers return `{ status, body }` with a JSON body.
+- API handlers return `{ status, body }` with a JSON body and receive parsed request bodies.
+- Production HTML cache, graceful shutdown, and `--host`/`HOST` binding.
 - Query strings and fragments are ignored during route lookup.
 - Development live reload over SSE and CSS hot swap without a page reload.
 - React Fast Refresh for client components, preserving component state.

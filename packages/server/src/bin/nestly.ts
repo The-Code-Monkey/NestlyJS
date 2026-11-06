@@ -25,11 +25,13 @@ export function run(
     : process.env.PORT
       ? parseInt(process.env.PORT)
       : undefined;
+  const host = flags.host || process.env.HOST || undefined;
 
   switch (command) {
     case "dev":
       load(path.join(__dirname, "../devServer")).start({
         port: port || 3000,
+        host,
       });
       break;
 
@@ -46,11 +48,12 @@ export function run(
     case "start":
       load(path.join(__dirname, "../prodServer")).start({
         port: port || 3000,
+        host,
       });
       break;
 
     default:
-      console.log("Usage: nestly [dev|build|start] [--port=PORT]");
+      console.log("Usage: nestly [dev|build|start] [--port=PORT] [--host=HOST]");
       process.exit(1);
   }
 }

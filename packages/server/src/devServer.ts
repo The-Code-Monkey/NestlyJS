@@ -10,8 +10,9 @@ import { HMR_PATH, hmrHandler, startHmrWatcher } from "./hmr";
 
 export function start({
   port = 3000,
+  host,
   totalWorkers,
-}: { port?: number; totalWorkers?: number } = {}) {
+}: { port?: number; host?: string; totalWorkers?: number } = {}) {
   const numWorkers = totalWorkers || os.cpus().length;
 
   if (cluster.isPrimary) {
@@ -80,9 +81,9 @@ export function start({
       }
     });
 
-    server.listen(port, () => {
+    server.listen(port, host, () => {
       console.log(
-        `[WORKER ${process.pid}] Listening on http://localhost:${port}`
+        `[WORKER ${process.pid}] Listening on http://${host || "localhost"}:${port}`
       );
     });
   }
