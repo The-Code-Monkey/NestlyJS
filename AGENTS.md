@@ -101,3 +101,17 @@ yarn changeset
 - Run the server build, unit tests, and a dev-server smoke test after behavior changes. Run the production build/start suite for runtime changes.
 - Do not assume the production path works.
 - Prefer fixing the existing architecture over layering new abstractions on stale files.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `The-Code-Monkey/NestlyJS`, via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five roles, label strings unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: root `GLOSSARY-MAP.md` points to per-context glossaries; system-wide ADRs in `docs/adr/`. See `docs/agents/domain.md`.
