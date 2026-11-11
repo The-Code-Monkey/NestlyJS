@@ -4,11 +4,7 @@ import os from "os";
 import fs from "fs";
 import path from "path";
 import { matchManifestRoute } from "./prodRouter";
-import {
-  isStaticAssetPath,
-  serveClientAsset,
-  serveStaticAsset,
-} from "./staticAssets";
+import { serveClientAsset, serveStaticAsset } from "./staticAssets";
 import {
   hydrationScript,
   injectBody,
@@ -18,8 +14,7 @@ import {
 import type { Manifest } from "./manifest";
 import { HtmlCache } from "./htmlCache";
 import { RequestBodyError, readRequestBody } from "./requestBody";
-
-const CLIENT_PREFIX = "/_nestly/client/";
+import { decideRequest, notFoundResponse } from "./requestPipeline";
 
 export function loadManifest(filePath: string): Manifest {
   return JSON.parse(fs.readFileSync(filePath, "utf8")) as Manifest;
@@ -47,82 +42,88 @@ export async function handleRequest(
   const method = (req.method || "GET").toUpperCase();
 
   try {
-    if (
-      (method === "GET" || method === "HEAD") &&
-      urlPath.startsWith(CLIENT_PREFIX)
-    ) {
-      serveClientAsset(req, res, urlPath.slice(CLIENT_PREFIX.length));
-      return;
-    }
+    const decision = decideRequest(urlPath, method, (cleanPath) => {
+      const matched = matchManifestRoute(manifest, cleanPath);
+      if (!matched) return null;
+      return {
+        route: matched.route,
+        params: matched.params,
+        hasPage: !!matched.route.page,
+        hasApi: !!matched.route.api,
+      };
+    });
 
-    if (
-      (method === "GET" || method === "HEAD") &&
-      isStaticAssetPath(urlPath)
-    ) {
-      serveStaticAsset(req, res, urlPath);
-      return;
-    }
+    switch (decision.kind) {
+      case "clientAsset":
+        serveClientAsset(req, res, decision.assetPath!);
+        return;
 
-    const matched = matchManifestRoute(manifest, urlPath);
+      case "staticAsset":
+        serveStaticAsset(req, res, decision.path);
+        return;
 
-    if (method === "GET" && matched?.route.page) {
-      const cacheKey = urlPath.split(/[?#]/)[0] || "/";
-      const cached = htmlCache.get(cacheKey);
-      if (cached !== undefined) {
+      case "page": {
+        const route = decision.route;
+        const cacheKey = decision.path;
+        const cached = htmlCache.get(cacheKey);
+        if (cached !== undefined) {
+          res.writeHead(200, {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
+          });
+          res.end(cached);
+          return;
+        }
+
+        const serverModule = loadModule(path.join(outDir, route.page!.entry));
+        const { html, instances } = await renderPageTree(
+          serverModule.page,
+          serverModule.layouts,
+          decision.params
+        );
+
+        let document = html;
+        if (route.page!.style) {
+          document = injectHead(
+            document,
+            `<link rel="stylesheet" href="${route.page!.style}">`
+          );
+        }
+
+        if (route.page!.script) {
+          let scripts = `<script type="module" src="${route.page!.script}"></script>`;
+          if (instances.length > 0) scripts += hydrationScript(instances);
+          document = injectBody(document, scripts);
+        }
+
+        htmlCache.set(cacheKey, document);
         res.writeHead(200, {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
         });
-        res.end(cached);
+        res.end(document);
         return;
       }
 
-      const serverModule = loadModule(
-        path.join(outDir, matched.route.page.entry)
-      );
-      const { html, instances } = await renderPageTree(
-        serverModule.page,
-        serverModule.layouts,
-        matched.params
-      );
+      case "api": {
+        const route = decision.route;
+        const apiModule = loadModule(path.join(outDir, route.api!.entry));
+        const handler = apiModule[decision.method];
 
-      let document = html;
-      if (matched.route.page.style) {
-        document = injectHead(
-          document,
-          `<link rel="stylesheet" href="${matched.route.page.style}">`
-        );
-      }
+        if (typeof handler !== "function") {
+          const notFound = notFoundResponse(decision.method);
+          res.writeHead(notFound.status);
+          res.end(notFound.body);
+          return;
+        }
 
-      if (matched.route.page.script) {
-        let scripts = `<script type="module" src="${matched.route.page.script}"></script>`;
-        if (instances.length > 0) scripts += hydrationScript(instances);
-        document = injectBody(document, scripts);
-      }
-
-      htmlCache.set(cacheKey, document);
-      res.writeHead(200, {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-store",
-      });
-      res.end(document);
-      return;
-    }
-
-    if (matched?.route.api) {
-      const apiModule = loadModule(
-        path.join(outDir, matched.route.api.entry)
-      );
-      const handler = apiModule[method];
-
-      if (typeof handler === "function") {
         const body = await readRequestBody(req);
         const result = await handler({
-          method,
-          url: urlPath,
+          method: decision.method,
+          url: decision.url,
           headers: req.headers,
           body,
-          params: matched.params,
+          params: decision.params,
         });
         if (!result) throw new Error("API handler did not return a result");
 
@@ -132,10 +133,14 @@ export async function handleRequest(
         res.end(JSON.stringify(result.body));
         return;
       }
-    }
 
-    res.writeHead(404);
-    res.end(method === "GET" ? "Page not found" : "API route not found");
+      case "notFound": {
+        const notFound = notFoundResponse(decision.method);
+        res.writeHead(notFound.status);
+        res.end(notFound.body);
+        return;
+      }
+    }
   } catch (err) {
     if (err instanceof RequestBodyError) {
       res.writeHead(err.status, { "Content-Type": "application/json" });

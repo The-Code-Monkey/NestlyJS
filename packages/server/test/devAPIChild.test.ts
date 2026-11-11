@@ -88,25 +88,23 @@ describe("handleApiMessage", () => {
     });
   });
 
-  it("returns 500 when the method is missing", async () => {
+  it("reports not found when the method is missing", async () => {
     const file = writeApi("missing", `export const GET = 1;`);
     const send = vi.fn();
 
     await handleApiMessage({ file, method: "POST", url: "/" }, send);
 
-    expect(send.mock.calls[0][0].status).toBe(500);
-    expect(send.mock.calls[0][0].body.error).toContain("not found");
-    expect(errorSpy).toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith({ type: "apiNotFound" });
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it("returns 500 when the export is not a function", async () => {
+  it("reports not found when the export is not a function", async () => {
     const file = writeApi("not-function", `export const GET = 1;`);
     const send = vi.fn();
 
     await handleApiMessage({ file, method: "GET", url: "/" }, send);
 
-    expect(send.mock.calls[0][0].status).toBe(500);
-    expect(send.mock.calls[0][0].body.error).toContain("not a function");
+    expect(send).toHaveBeenCalledWith({ type: "apiNotFound" });
   });
 
   it("returns 500 when the handler returns nothing", async () => {

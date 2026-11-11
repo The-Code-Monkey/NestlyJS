@@ -36,6 +36,10 @@ _Avoid_: Query params, search params, URL variables
 The ordered segment kinds of a Route, used to match URL segments and rank precedence.
 _Avoid_: Route template, path pattern, URL mask
 
+**Request Pipeline**:
+The dispatch decision that turns a URL and method into one request kind: client asset, static asset, Page, API route, or not found.
+_Avoid_: Dispatcher, router
+
 **Static Asset**:
 A file served from the Public Directory, addressed by a URL path that ends with a file extension.
 _Avoid_: Resource, media file

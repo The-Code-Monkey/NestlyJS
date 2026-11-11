@@ -20,11 +20,9 @@ export async function handleApiMessage(
     console.log(`[CHILD ${pid}] Executing API: ${method} ${url}`);
     const apiModule = await import(file);
     const handler = apiModule?.[method];
-    if (!handler) {
-      throw new Error(`Method ${method} not found in ${file}`);
-    }
     if (typeof handler !== "function") {
-      throw new Error(`Method ${method} in ${file} is not a function`);
+      send({ type: "apiNotFound" });
+      return;
     }
     const result = await handler({ method, url, headers, body, params });
     if (!result) {

@@ -37,7 +37,7 @@ interface StaticFile {
   contentType: string;
 }
 
-function cleanUrlPath(urlPath: string) {
+export function cleanUrlPath(urlPath: string) {
   return urlPath.split(/[?#]/)[0] || "/";
 }
 

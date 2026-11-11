@@ -1,10 +1,15 @@
 // devSSRWorker.ts
 import http from "http";
 import { fork, ChildProcess } from "child_process";
-import fs from "fs";
 import path from "path";
-import { resolveRoute } from "./routeResolver";
 import chokidar from "chokidar";
+import type { RouteParams } from "./routePatterns";
+
+export interface PageRequest {
+  pageFile: string;
+  url: string;
+  params: RouteParams;
+}
 
 const PAGE_CHILDREN: Map<string, ChildProcess> = new Map();
 const PENDING_REQUESTS: Map<string, http.ServerResponse[]> = new Map();
@@ -17,18 +22,10 @@ chokidar.watch(ROUTES_DIR, { ignoreInitial: true }).on("all", () => {
 
 export async function devSSRHandler(
   req: http.IncomingMessage,
-  res: http.ServerResponse
+  res: http.ServerResponse,
+  request: PageRequest
 ) {
-  const urlPath = req.url || "/";
-  const method = req.method?.toUpperCase() || "GET";
-
-  const route = method === "GET" ? resolveRoute(urlPath) : null;
-  if (!route || !fs.existsSync(route.pageFile)) {
-    res.writeHead(404);
-    res.end("Page not found");
-    return;
-  }
-
+  const urlPath = request.url;
   const childPath = path.resolve(__dirname, "devChildWorker.js");
 
   // ----------------------------
@@ -81,8 +78,8 @@ export async function devSSRHandler(
   // ----------------------------
   PENDING_REQUESTS.get(urlPath)!.push(res);
   PAGE_CHILDREN.get(urlPath)!.send({
-    file: route.pageFile,
+    file: request.pageFile,
     url: urlPath,
-    params: route.params,
+    params: request.params,
   });
 }

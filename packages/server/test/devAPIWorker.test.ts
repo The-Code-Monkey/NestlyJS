@@ -4,15 +4,6 @@ const m = vi.hoisted(() => {
   const state: any = {
     children: [] as any[],
     watchCb: null as any,
-    getAPIRoute: vi.fn(() => ({
-      handler: () => {},
-      route: {
-        routeDir: "/tmp",
-        pageFile: "/tmp/page.tsx",
-        apiFile: "/tmp/api.ts",
-        params: { slug: "hello" },
-      },
-    })),
     exists: vi.fn(() => true),
     readBody: vi.fn(),
   };
@@ -42,9 +33,6 @@ vi.mock("child_process", () => ({ fork: m.fork }));
 vi.mock("fs", () => ({
   default: { existsSync: m.exists, watch: m.watch },
 }));
-vi.mock("../src/routeResolver", () => ({
-  getAPIRoute: m.getAPIRoute,
-}));
 vi.mock("../src/requestBody", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/requestBody")>();
   return { ...actual, readRequestBody: m.readBody };
@@ -58,6 +46,15 @@ function response() {
 }
 
 let counter = 0;
+function request(url: string, method = "POST") {
+  return {
+    apiFile: "/tmp/api.ts",
+    method,
+    url,
+    params: { slug: "hello" },
+  };
+}
+
 function nextUrl() {
   return `/api-${counter++}`;
 }
@@ -67,32 +64,17 @@ describe("devAPIHandler", () => {
     vi.clearAllMocks();
     m.readBody.mockResolvedValue({ ok: true });
     m.children.length = 0;
-    m.getAPIRoute.mockReturnValue({
-      handler: () => {},
-      route: {
-        routeDir: "/tmp",
-        pageFile: "/tmp/page.tsx",
-        apiFile: "/tmp/api.ts",
-        params: { slug: "hello" },
-      },
-    });
     m.exists.mockReturnValue(true);
-  });
-
-  it("returns 404 when no API method exists", async () => {
-    m.getAPIRoute.mockReturnValue(null);
-    const res = response();
-    await devAPIHandler({ url: "/", method: "POST" } as any, res as any);
-    expect(res.writeHead).toHaveBeenCalledWith(404);
-    expect(res.end).toHaveBeenCalledWith("API route not found");
   });
 
   it("returns 500 when the API file is missing", async () => {
     m.exists.mockReturnValue(false);
+    const url = nextUrl();
     const res = response();
     await devAPIHandler(
-      { url: nextUrl(), method: "POST" } as any,
-      res as any
+      { url, method: "POST" } as any,
+      res as any,
+      request(url)
     );
     expect(res.writeHead).toHaveBeenCalledWith(500);
     expect(res.end).toHaveBeenCalledWith("API file not found");
@@ -101,7 +83,11 @@ describe("devAPIHandler", () => {
   it("forks a child and returns the API response", async () => {
     const url = nextUrl();
     const res = response();
-    await devAPIHandler({ url, method: "POST" } as any, res as any);
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      res as any,
+      request(url)
+    );
 
     expect(m.fork).toHaveBeenCalledTimes(1);
     const child = m.children[0];
@@ -126,10 +112,29 @@ describe("devAPIHandler", () => {
     expect(res.end).toHaveBeenCalledWith('{"ok":true}');
   });
 
+  it("returns 404 when the child reports a missing API method", async () => {
+    const url = nextUrl();
+    const res = response();
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      res as any,
+      request(url)
+    );
+
+    m.children[0].handlers.message({ type: "apiNotFound" });
+
+    expect(res.writeHead).toHaveBeenCalledWith(404);
+    expect(res.end).toHaveBeenCalledWith("API route not found");
+  });
+
   it("defaults the status to 200", async () => {
     const url = nextUrl();
     const res = response();
-    await devAPIHandler({ url, method: "PUT" } as any, res as any);
+    await devAPIHandler(
+      { url, method: "PUT" } as any,
+      res as any,
+      request(url, "PUT")
+    );
     m.children[0].handlers.message({
       type: "apiResponse",
       status: 0,
@@ -142,17 +147,21 @@ describe("devAPIHandler", () => {
 
   it("ignores unrelated messages", async () => {
     const url = nextUrl();
-    const res = response();
-    await devAPIHandler({ url, method: "POST" } as any, res as any);
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      response() as any,
+      request(url)
+    );
     m.children[0].handlers.message({ type: "ready" });
-    expect(res.end).not.toHaveBeenCalled();
+    expect(m.children[0].send).toHaveBeenCalledTimes(1);
   });
 
   it("reuses an existing child for the same method and URL", async () => {
     const url = nextUrl();
     await devAPIHandler(
       { url, method: "POST" } as any,
-      response() as any
+      response() as any,
+      request(url)
     );
     const child = m.children[0];
     child.handlers.message({
@@ -163,7 +172,8 @@ describe("devAPIHandler", () => {
 
     await devAPIHandler(
       { url, method: "POST" } as any,
-      response() as any
+      response() as any,
+      request(url)
     );
 
     expect(m.fork).toHaveBeenCalledTimes(1);
@@ -174,11 +184,13 @@ describe("devAPIHandler", () => {
     m.readBody.mockRejectedValue(
       new RequestBodyError(400, "Invalid JSON")
     );
+    const url = nextUrl();
     const res = response();
 
     await devAPIHandler(
-      { url: nextUrl(), method: "POST" } as any,
-      res as any
+      { url, method: "POST" } as any,
+      res as any,
+      request(url)
     );
 
     expect(res.writeHead).toHaveBeenCalledWith(400, {
@@ -189,11 +201,13 @@ describe("devAPIHandler", () => {
 
   it("rethrows unexpected body errors", async () => {
     m.readBody.mockRejectedValue(new Error("boom"));
+    const url = nextUrl();
 
     await expect(
       devAPIHandler(
-        { url: nextUrl(), method: "POST" } as any,
-        response() as any
+        { url, method: "POST" } as any,
+        response() as any,
+        request(url)
       )
     ).rejects.toThrow("boom");
   });
@@ -202,7 +216,8 @@ describe("devAPIHandler", () => {
     const url = nextUrl();
     await devAPIHandler(
       { url, method: "POST" } as any,
-      response() as any
+      response() as any,
+      request(url)
     );
     const child = m.children[0];
 
@@ -214,7 +229,11 @@ describe("devAPIHandler", () => {
   it("returns 500 when the child exits with pending requests", async () => {
     const url = nextUrl();
     const res = response();
-    await devAPIHandler({ url, method: "POST" } as any, res as any);
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      res as any,
+      request(url)
+    );
 
     m.children[0].handlers.exit(1, null);
 

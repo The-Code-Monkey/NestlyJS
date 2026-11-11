@@ -1,29 +1,31 @@
 // devAPIWorker.ts
 import http from "http";
 import { fork, ChildProcess } from "child_process";
-import { getAPIRoute } from "./routeResolver";
 import { RequestBodyError, readRequestBody } from "./requestBody";
 import fs from "fs";
 import path from "path";
+import type { RouteParams } from "./routePatterns";
+import { notFoundResponse } from "./requestPipeline";
+
+export interface APIRequest {
+  apiFile: string;
+  method: string;
+  url: string;
+  params: RouteParams;
+}
 
 const ACTIVE_CHILDREN: Map<string, ChildProcess> = new Map();
 const PENDING_REQUESTS: Map<string, http.ServerResponse[]> = new Map();
 
 export async function devAPIHandler(
   req: http.IncomingMessage,
-  res: http.ServerResponse
+  res: http.ServerResponse,
+  request: APIRequest
 ) {
-  const urlPath = req.url || "/";
-  const method = (req.method || "GET").toUpperCase();
+  const urlPath = request.url;
+  const method = request.method;
 
   console.log(`[API WORKER ${process.pid}] Request: ${method} ${urlPath}`);
-
-  const api = getAPIRoute(urlPath, method);
-  if (!api) {
-    res.writeHead(404);
-    res.end("API route not found");
-    return;
-  }
 
   let body: unknown;
   try {
@@ -38,7 +40,7 @@ export async function devAPIHandler(
   }
 
   const key = `${method}:${urlPath}`;
-  const { apiFile } = api.route;
+  const apiFile = request.apiFile;
 
   // ----------------------------
   // Ensure child exists
@@ -81,6 +83,17 @@ export async function devAPIHandler(
 
     // Respond to messages from child
     child.on("message", (msg: any) => {
+      if (msg?.type === "apiNotFound") {
+        const pending = PENDING_REQUESTS.get(key) || [];
+        const notFound = notFoundResponse(method);
+        pending.forEach((r) => {
+          r.writeHead(notFound.status);
+          r.end(notFound.body);
+        });
+        PENDING_REQUESTS.set(key, []);
+        return;
+      }
+
       if (msg?.type === "apiResponse") {
         const pending = PENDING_REQUESTS.get(key) || [];
         pending.forEach((r) => {
@@ -104,9 +117,9 @@ export async function devAPIHandler(
   ACTIVE_CHILDREN.get(key)!.send({
     file: apiFile,
     method,
-    url: req.url,
+    url: urlPath,
     headers: req.headers,
     body,
-    params: api.route.params,
+    params: request.params,
   });
 }
