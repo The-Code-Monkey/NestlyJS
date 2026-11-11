@@ -1,8 +1,6 @@
-export type PatternSegment =
-  | { kind: "static"; value: string }
-  | { kind: "dynamic"; name: string }
-  | { kind: "catchAll"; name: string }
-  | { kind: "optionalCatchAll"; name: string };
+import type { PatternSegment } from "./routePatterns";
+
+export type { PatternSegment };
 
 export interface PageAssets {
   entry: string;
