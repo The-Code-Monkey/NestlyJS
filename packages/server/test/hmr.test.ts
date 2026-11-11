@@ -175,8 +175,7 @@ describe("handleChange", () => {
     const { req, res } = connection();
     hmrHandler(req, res);
 
-    handleChange(path.join(root, "routes", "style.css"));
-    await new Promise((resolve) => setImmediate(resolve));
+    await handleChange(path.join(root, "routes", "style.css"));
 
     const events = messages(res);
     expect(events[0].type).toBe("css");

@@ -68,7 +68,7 @@ export default function Page() { return Button; }`
   });
 
   it("returns an empty script for no components", async () => {
-    await expect(bundleClientScript([])).resolves.toEqual({ js: "", css: "" });
+    await expect(bundleClientScript([])).resolves.toEqual({ js: "" });
   });
 
   it("deduplicates components by id", async () => {

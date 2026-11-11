@@ -1,6 +1,6 @@
 # NestlyJS
 
-A file-based full-stack framework for React sites. Routes live in the app's `routes/` directory and resolve to server-rendered pages or HTTP API handlers. The development server is the only implemented runtime.
+A file-based full-stack framework for React sites. Routes live in the app's `routes/` directory and resolve to server-rendered pages or HTTP API handlers. The development server and the production server share these route semantics.
 
 ## Language
 
@@ -104,6 +104,18 @@ _Avoid_: Re-render, bootstrapping
 The JavaScript sent for one page, containing all of that page's client components and their shared dependencies exactly once.
 _Avoid_: Chunk, vendor bundle, client bundle
 
+**Page Graph**:
+The discovered assets of a Page: its Layout chain, Client Component files, and CSS files, derived from the Page file alone.
+_Avoid_: Asset map, page manifest, dependency graph
+
+**Page CSS**:
+CSS owned by the server-rendered Page and its Layouts, excluding CSS reachable only through Client Components.
+_Avoid_: Global CSS, server CSS
+
+**Client CSS**:
+CSS owned by Client Components, emitted after Page CSS for the Page.
+_Avoid_: Component CSS, bundle CSS
+
 **Development Server**:
-The clustered runtime started by `nestly dev`. It is the only implemented server mode.
+The clustered runtime started by `nestly dev`, used for local development and live updates.
 _Avoid_: Dev mode, local server

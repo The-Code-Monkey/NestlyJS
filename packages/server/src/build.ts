@@ -2,13 +2,8 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { build } from "esbuild";
-import {
-  clientIdFor,
-  collectClientComponents,
-  collectCss,
-  findLayoutComponents,
-  isClientComponent,
-} from "./renderer";
+import { bundleCssFiles } from "./bundler";
+import { clientIdFor, getPageGraph } from "./pageGraph";
 import { classifySegment } from "./routePatterns";
 import type {
   ApiAssets,
@@ -177,18 +172,10 @@ export async function buildApp(): Promise<Manifest> {
 
     if (route.pageFile) {
       const index = pageIndex++;
-      const layoutFiles = await findLayoutComponents(
-        route.pageFile.replace("page.tsx", "")
-      );
+      const graph = getPageGraph(route.pageFile);
+      const layoutFiles = graph.layouts;
+      const clientList = graph.clientFiles;
 
-      const clientFiles = new Set<string>();
-      collectClientComponents(route.pageFile, undefined, clientFiles);
-      for (const layout of layoutFiles) {
-        collectClientComponents(layout, undefined, clientFiles);
-      }
-      if (isClientComponent(route.pageFile)) clientFiles.add(route.pageFile);
-
-      const clientList = [...clientFiles].sort();
       const serverEntry = path.join(genDir, `page-${index}.ts`);
       fs.writeFileSync(
         serverEntry,
@@ -209,14 +196,9 @@ export async function buildApp(): Promise<Manifest> {
         clientEntries.push({ pageIndex: index, contents: clientEntry });
       }
 
-      const seenCss = new Set<string>();
-      const cssFiles = [
-        ...layoutFiles.flatMap((layout) =>
-          collectCss(layout, undefined, false)
-        ),
-        ...collectCss(route.pageFile, undefined, false),
-      ].filter((file) => !seenCss.has(file) && seenCss.add(file));
-      if (cssFiles.length > 0) styleEntries.push({ pageIndex: index, cssFiles });
+      if (graph.cssFiles.length > 0) {
+        styleEntries.push({ pageIndex: index, cssFiles: graph.cssFiles });
+      }
 
       manifestRoute.page = page;
       routes.push(manifestRoute);
@@ -280,24 +262,9 @@ export async function buildApp(): Promise<Manifest> {
   }
 
   for (const styleEntry of styleEntries) {
-    const contents = styleEntry.cssFiles
-      .map((file) => `import ${JSON.stringify(file)};`)
-      .join("\n");
-    const result = await build({
-      stdin: {
-        contents,
-        resolveDir: appRoot,
-        sourcefile: `style-${styleEntry.pageIndex}.ts`,
-        loader: "ts",
-      },
-      outdir: clientDir,
-      bundle: true,
-      write: false,
-      logLevel: "silent",
-    });
-    const css = result.outputFiles!.find((file) => file.path.endsWith(".css"))!;
-    const filename = `style-${styleEntry.pageIndex}-${hashContent(css.text)}.css`;
-    fs.writeFileSync(path.join(clientDir, filename), css.text);
+    const css = await bundleCssFiles(styleEntry.cssFiles);
+    const filename = `style-${styleEntry.pageIndex}-${hashContent(css)}.css`;
+    fs.writeFileSync(path.join(clientDir, filename), css);
 
     const route = routes.find(
       (candidate) =>

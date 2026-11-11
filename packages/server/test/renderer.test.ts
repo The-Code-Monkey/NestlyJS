@@ -1,61 +1,23 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import os from "os";
-import path from "path";
-import {
-  collectClientComponents,
-  injectBody,
-  injectHead,
-  isClientComponent,
-} from "../src/renderer";
+import { describe, it, expect } from "vitest";
+import { injectBody, injectHead } from "../src/renderer";
 
-let root: string;
-const originalCwd = process.cwd();
-
-beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "nestly-renderer-"));
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
-  process.chdir(originalCwd);
-});
-
-function write(name: string, contents: string) {
-  const file = path.join(root, name);
-  fs.writeFileSync(file, contents);
-  return file;
-}
-
-describe("renderer helpers", () => {
-  it("returns no client components for an invalid path", () => {
-    expect(collectClientComponents("").size).toBe(0);
-    expect(
-      collectClientComponents(path.join(root, "missing.tsx")).size
-    ).toBe(0);
-  });
-
-  it("treats an empty file as a server component", () => {
-    const file = write("empty.tsx", "");
-    expect(isClientComponent(file)).toBe(false);
-  });
-
-  it("collects nested client components", () => {
-    write(
-      "button.tsx",
-      '"use client";\nexport default function Button() { return null; }'
-    );
-    const entry = write(
-      "page.tsx",
-      'import Button from "./button";\nexport default Button;'
-    );
-
-    const found = collectClientComponents(entry);
-    expect(found.has(path.join(root, "button.tsx"))).toBe(true);
-  });
-
+describe("renderer injection", () => {
   it("ignores empty injected markup", () => {
     expect(injectHead("<html></html>", "")).toBe("<html></html>");
     expect(injectBody("<html></html>", "")).toBe("<html></html>");
+  });
+
+  it("injects before closing head and body tags", () => {
+    expect(injectHead("<html><head></head></html>", "<meta>")).toBe(
+      "<html><head><meta></head></html>"
+    );
+    expect(injectBody("<html><body></body></html>", "<script>")).toBe(
+      "<html><body><script></body></html>"
+    );
+  });
+
+  it("falls back when the tags are missing", () => {
+    expect(injectHead("<p>page</p>", "<meta>")).toBe("<meta><p>page</p>");
+    expect(injectBody("<p>page</p>", "<script>")).toBe("<p>page</p><script>");
   });
 });

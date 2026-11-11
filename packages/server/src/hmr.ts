@@ -3,7 +3,8 @@ import path from "path";
 import chokidar from "chokidar";
 import type { IncomingMessage, ServerResponse } from "http";
 import { resolveRoute } from "./routeResolver";
-import { collectCss, findLayoutComponents } from "./renderer";
+import { getPageGraph } from "./pageGraph";
+import { bundleCssFiles } from "./bundler";
 import { buildClientScriptForUrl } from "./devRefresh";
 
 export const HMR_PATH = "/_nestly/hmr";
@@ -83,18 +84,7 @@ export async function collectCssForUrl(urlPath: string) {
   const route = resolveRoute(urlPath);
   if (!route || !fs.existsSync(route.pageFile)) return "";
 
-  const layoutPaths = await findLayoutComponents(
-    route.pageFile.replace("page.tsx", "")
-  );
-  const seen = new Set<string>();
-  const files = [
-    ...layoutPaths.flatMap((layoutPath) =>
-      collectCss(layoutPath, undefined, false)
-    ),
-    ...collectCss(route.pageFile, undefined, false),
-  ].filter((file) => !seen.has(file) && seen.add(file) && fs.existsSync(file));
-
-  return files.map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  return bundleCssFiles(getPageGraph(route.pageFile).cssFiles);
 }
 
 async function broadcastCss() {
