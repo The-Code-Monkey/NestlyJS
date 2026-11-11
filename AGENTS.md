@@ -62,6 +62,7 @@ yarn workspace test-app test:routes
 yarn build
 yarn test
 node scripts/check-pack.mjs
+node scripts/check-install.mjs
 yarn changeset
 ```
 
@@ -76,6 +77,7 @@ yarn changeset
 - Pages and layouts use a default export.
 - API routes use named exports matching HTTP methods, such as `GET`, `POST`, `PUT`.
 - Changes to `@nestlyjs/server` need a `.changeset` entry.
+- Merging to `main` runs Changesets; the version PR publishes with `NPM_TOKEN`.
 - Renovate automerge is enabled.
 - Vitest with v8 coverage. Run `yarn test` from the repo root.
 - The server package ships only `dist/` and `tsconfig.devServer.json`. Verify with `node scripts/check-pack.mjs` after building.

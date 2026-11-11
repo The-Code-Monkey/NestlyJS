@@ -152,6 +152,16 @@ PORT=4000 yarn workspace test-app dev
 yarn workspace test-app test:routes
 ```
 
+## Releases
+
+Releases use Changesets. Merging to `main` opens a version PR; merging that PR publishes `@nestlyjs/server` when `NPM_TOKEN` is configured in GitHub Actions.
+
+```sh
+yarn changeset
+node scripts/check-pack.mjs
+node scripts/check-install.mjs
+```
+
 ## Documentation
 
 - [Roadmap](./docs/ROADMAP.md)
