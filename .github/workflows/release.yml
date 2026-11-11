@@ -36,7 +36,7 @@ jobs:
         run: node scripts/check-pack.mjs
 
       - name: Create release pull request or publish
-        uses: changesets/action@v1
+        uses: changesets/action@v2.1.2
         with:
           publish: yarn changeset publish
           version: yarn changeset version
