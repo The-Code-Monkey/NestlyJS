@@ -7,12 +7,12 @@ const m = vi.hoisted(() => ({
   createServer: vi.fn(),
   listen: vi.fn((_port: number, _host?: string, cb?: () => void) => cb?.()),
   cpus: vi.fn(() => [{}, {}]),
-  hasPage: vi.fn(),
-  getAPI: vi.fn(),
+  resolve: vi.fn(),
+  exists: vi.fn(() => true),
   ssr: vi.fn(async () => {}),
   api: vi.fn(async () => {}),
-  isStatic: vi.fn(),
-  serve: vi.fn(),
+  serveStatic: vi.fn(),
+  serveClient: vi.fn(),
   hmrHandler: vi.fn(),
   startHmr: vi.fn(),
 }));
@@ -37,15 +37,14 @@ vi.mock("http", () => ({
 }));
 
 vi.mock("os", () => ({ default: { cpus: m.cpus } }));
+vi.mock("fs", () => ({ default: { existsSync: m.exists } }));
 vi.mock("../src/devSSRWorker", () => ({ devSSRHandler: m.ssr }));
 vi.mock("../src/devAPIWorker", () => ({ devAPIHandler: m.api }));
-vi.mock("../src/routeResolver", () => ({
-  hasPageForGET: m.hasPage,
-  getAPIMethod: m.getAPI,
-}));
-vi.mock("../src/staticAssets", () => ({
-  isStaticAssetPath: m.isStatic,
-  serveStaticAsset: m.serve,
+vi.mock("../src/routeResolver", () => ({ resolveRoute: m.resolve }));
+vi.mock("../src/staticAssets", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/staticAssets")>()),
+  serveStaticAsset: m.serveStatic,
+  serveClientAsset: m.serveClient,
 }));
 vi.mock("../src/hmr", () => ({
   HMR_PATH: "/_nestly/hmr",
@@ -61,13 +60,21 @@ function response() {
   return { writeHead: vi.fn(), end: vi.fn() };
 }
 
+const route = {
+  routeDir: "/tmp",
+  pageFile: "/tmp/page.tsx",
+  apiFile: "/tmp/api.ts",
+  params: { slug: "hello" },
+};
+
 describe("devServer", () => {
   let errorSpy: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
     m.state.isPrimary = true;
-    m.isStatic.mockReturnValue(false);
+    m.resolve.mockReturnValue(null);
+    m.exists.mockReturnValue(true);
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -104,10 +111,11 @@ describe("devServer", () => {
 
     expect(m.startHmr).toHaveBeenCalled();
     expect(m.hmrHandler).toHaveBeenCalledWith(req, res);
+    expect(m.resolve).not.toHaveBeenCalled();
     expect(m.ssr).not.toHaveBeenCalled();
   });
 
-  it("listens on the configured host", async () => {
+  it("listens on the configured host", () => {
     m.state.isPrimary = false;
     start({ port: 3000, host: "127.0.0.1" });
 
@@ -118,85 +126,83 @@ describe("devServer", () => {
     );
   });
 
-  it("serves static asset paths before routes", async () => {
+  it("serves a client asset without route lookup", async () => {
     m.state.isPrimary = false;
     start({ port: 3000 });
-    m.isStatic.mockReturnValue(true);
+
+    const handler: Handler = m.createServer.mock.calls[0][0];
+    const req = { url: "/_nestly/client/app.js", method: "GET" };
+    const res = response();
+    await handler(req, res);
+
+    expect(m.serveClient).toHaveBeenCalledWith(req, res, "app.js");
+    expect(m.resolve).not.toHaveBeenCalled();
+  });
+
+  it("serves a static asset decision", async () => {
+    m.state.isPrimary = false;
+    start({ port: 3000 });
 
     const handler: Handler = m.createServer.mock.calls[0][0];
     const req = { url: "/logo.png", method: "GET" };
     const res = response();
     await handler(req, res);
 
-    expect(m.serve).toHaveBeenCalledWith(req, res, "/logo.png");
+    expect(m.serveStatic).toHaveBeenCalledWith(req, res, "/logo.png");
     expect(m.ssr).not.toHaveBeenCalled();
-    expect(m.hasPage).not.toHaveBeenCalled();
   });
 
-  it("serves HEAD static asset paths", async () => {
+  it("sends a page decision to the SSR child", async () => {
     m.state.isPrimary = false;
     start({ port: 3000 });
-    m.isStatic.mockReturnValue(true);
+    m.resolve.mockReturnValue(route);
 
     const handler: Handler = m.createServer.mock.calls[0][0];
-    const req = { url: "/logo.png", method: "HEAD" };
+    const req = { url: "/blog/hello?x=1", method: "GET" };
     const res = response();
     await handler(req, res);
 
-    expect(m.serve).toHaveBeenCalledWith(req, res, "/logo.png");
+    expect(m.ssr).toHaveBeenCalledWith(req, res, {
+      pageFile: "/tmp/page.tsx",
+      url: "/blog/hello?x=1",
+      params: { slug: "hello" },
+    });
   });
 
-  it("routes a GET page request to the SSR handler", async () => {
+  it("sends an API decision to the API child with the original URL", async () => {
     m.state.isPrimary = false;
     start({ port: 3000 });
-    m.hasPage.mockReturnValue(true);
+    m.resolve.mockReturnValue(route);
+    m.exists.mockImplementation((file: string) => file.endsWith("api.ts"));
 
     const handler: Handler = m.createServer.mock.calls[0][0];
+    const req = { url: "/hooks/1?x=1", method: "POST" };
     const res = response();
-    await handler({ url: "/", method: "GET" }, res);
+    await handler(req, res);
 
-    expect(m.ssr).toHaveBeenCalledWith({ url: "/", method: "GET" }, res);
-    expect(m.listen).toHaveBeenCalledWith(
-      3000,
-      undefined,
-      expect.any(Function)
-    );
+    expect(m.api).toHaveBeenCalledWith(req, res, {
+      apiFile: "/tmp/api.ts",
+      method: "POST",
+      url: "/hooks/1?x=1",
+      params: { slug: "hello" },
+    });
   });
 
-  it("routes an API request to the API handler", async () => {
+  it("returns 404 for a not-found GET decision", async () => {
     m.state.isPrimary = false;
     start({ port: 3000 });
-    m.hasPage.mockReturnValue(false);
-    m.getAPI.mockReturnValue(() => {});
-
-    const handler: Handler = m.createServer.mock.calls[0][0];
-    const res = response();
-    await handler({ url: "/api", method: "POST" }, res);
-
-    expect(m.api).toHaveBeenCalled();
-  });
-
-  it("returns 404 for a missing GET page", async () => {
-    m.state.isPrimary = false;
-    start({ port: 3000 });
-    m.hasPage.mockReturnValue(false);
-    m.getAPI.mockReturnValue(null);
 
     const handler: Handler = m.createServer.mock.calls[0][0];
     const res = response();
     await handler({ url: "/missing", method: "GET" }, res);
 
     expect(res.writeHead).toHaveBeenCalledWith(404);
-    expect(res.end).toHaveBeenCalledWith(
-      "Page not found or handled by API worker"
-    );
+    expect(res.end).toHaveBeenCalledWith("Page not found");
   });
 
-  it("returns 404 for a missing non-GET route", async () => {
+  it("returns the API not-found message for non-GET", async () => {
     m.state.isPrimary = false;
     start({ port: 3000 });
-    m.hasPage.mockReturnValue(false);
-    m.getAPI.mockReturnValue(null);
 
     const handler: Handler = m.createServer.mock.calls[0][0];
     const res = response();
@@ -209,7 +215,7 @@ describe("devServer", () => {
   it("returns 500 when a handler throws", async () => {
     m.state.isPrimary = false;
     start({ port: 3000 });
-    m.hasPage.mockReturnValue(true);
+    m.resolve.mockReturnValue(route);
     m.ssr.mockRejectedValueOnce(new Error("boom"));
 
     const handler: Handler = m.createServer.mock.calls[0][0];

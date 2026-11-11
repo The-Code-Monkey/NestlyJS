@@ -1,12 +1,32 @@
 // devServer.ts
 import cluster from "cluster";
+import fs from "fs";
 import http from "http";
 import os from "os";
 import { devSSRHandler } from "./devSSRWorker";
 import { devAPIHandler } from "./devAPIWorker";
-import { hasPageForGET, getAPIMethod } from "./routeResolver";
-import { isStaticAssetPath, serveStaticAsset } from "./staticAssets";
+import { resolveRoute, type ResolvedRoute } from "./routeResolver";
+import { serveClientAsset, serveStaticAsset } from "./staticAssets";
 import { HMR_PATH, hmrHandler, startHmrWatcher } from "./hmr";
+import {
+  decideRequest,
+  notFoundResponse,
+  type RouteResolution,
+} from "./requestPipeline";
+
+function lookupDevRoute(
+  path: string
+): RouteResolution<ResolvedRoute> | null {
+  const route = resolveRoute(path);
+  if (!route) return null;
+
+  return {
+    route,
+    params: route.params,
+    hasPage: fs.existsSync(route.pageFile),
+    hasApi: fs.existsSync(route.apiFile),
+  };
+}
 
 export function start({
   port = 3000,
@@ -35,44 +55,50 @@ export function start({
       const method = (req.method || "GET").toUpperCase();
 
       try {
-        // 0️⃣ Dev live-reload event stream
-        if (
-          method === "GET" &&
-          urlPath.split("?")[0] === HMR_PATH
-        ) {
+        // Dev live-reload event stream
+        if (method === "GET" && urlPath.split("?")[0] === HMR_PATH) {
           hmrHandler(req, res);
           return;
         }
 
-        // 1️⃣ Static file paths always resolve against public/
-        if (
-          (method === "GET" || method === "HEAD") &&
-          isStaticAssetPath(urlPath)
-        ) {
-          serveStaticAsset(req, res, urlPath);
-          return;
-        }
+        const decision = decideRequest(
+          urlPath,
+          method,
+          lookupDevRoute
+        );
 
-        // 2️⃣ GET request with page.tsx → SSR
-        if (method === "GET" && hasPageForGET(urlPath)) {
-          await devSSRHandler(req, res);
-          return;
-        }
+        switch (decision.kind) {
+          case "clientAsset":
+            serveClientAsset(req, res, decision.assetPath);
+            return;
 
-        // 3️⃣ API check for any method
-        const apiFunc = getAPIMethod(urlPath, method);
-        if (apiFunc) {
-          await devAPIHandler(req, res);
-          return;
-        }
+          case "staticAsset":
+            serveStaticAsset(req, res, decision.path);
+            return;
 
-        // 4️⃣ Not found
-        if (method === "GET") {
-          res.writeHead(404);
-          res.end("Page not found or handled by API worker");
-        } else {
-          res.writeHead(404);
-          res.end("API route not found");
+          case "page":
+            await devSSRHandler(req, res, {
+              pageFile: decision.route.pageFile,
+              url: decision.url,
+              params: decision.params,
+            });
+            return;
+
+          case "api":
+            await devAPIHandler(req, res, {
+              apiFile: decision.route.apiFile,
+              method: decision.method,
+              url: decision.url,
+              params: decision.params,
+            });
+            return;
+
+          case "notFound": {
+            const notFound = notFoundResponse(decision.method);
+            res.writeHead(notFound.status);
+            res.end(notFound.body);
+            return;
+          }
         }
       } catch (err) {
         console.error(`[WORKER ${process.pid}] Error handling request:`, err);

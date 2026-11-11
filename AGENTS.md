@@ -38,9 +38,10 @@ Working:
 ## Architecture map
 
 - `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start`; `build` calls `buildApp`; `start` calls `prodServer.start`. Supports `--port` for dev and start.
-- `src/devServer.ts` — primary process forks one worker per CPU core. Each worker routes in this order: static asset, GET page, API handler, 404. Dead workers restart automatically.
+- `src/devServer.ts` — primary process forks one worker per CPU core. Each worker asks the Request Pipeline to decide between client asset, static asset, Page, API route, and not found. Dead workers restart automatically.
 - `src/staticAssets.ts` — streams files from `process.cwd()/public` and `.nestly/client`, maps extensions to content types, and rejects traversal and symlink escapes.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
+- `src/requestPipeline.ts` — turns a URL and method into one decision: client asset, static asset, Page, API route, or not found, with params and route identity. Dev and production executors consume the decision instead of resolving again.
 - `src/devSSRWorker.ts` — forks one child per URL path, passes route params, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
 - `src/renderer.tsx` — shared SSR helpers: client detection, layout discovery, element walking, client wrapping, hydration markup, and asset injection.
 - `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and inlines assets and the HMR client in development.

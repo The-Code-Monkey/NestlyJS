@@ -4,13 +4,6 @@ const m = vi.hoisted(() => {
   const state: any = {
     children: [] as any[],
     watcherCb: null as any,
-    exists: vi.fn(() => true),
-    resolveRoute: vi.fn(() => ({
-      routeDir: "/tmp",
-      pageFile: "/tmp/page.tsx",
-      apiFile: "/tmp/api.ts",
-      params: { slug: "hello" },
-    })),
   };
 
   state.watch = vi.fn(() => {
@@ -41,16 +34,16 @@ const m = vi.hoisted(() => {
 });
 
 vi.mock("chokidar", () => ({ default: { watch: m.watch } }));
-vi.mock("fs", () => ({ default: { existsSync: m.exists } }));
 vi.mock("child_process", () => ({ fork: m.fork }));
-vi.mock("../src/routeResolver", () => ({
-  resolveRoute: m.resolveRoute,
-}));
 
 import { devSSRHandler } from "../src/devSSRWorker";
 
 function response() {
   return { writeHead: vi.fn(), end: vi.fn() };
+}
+
+function request(url: string) {
+  return { pageFile: "/tmp/page.tsx", url, params: { slug: "hello" } };
 }
 
 let counter = 0;
@@ -62,32 +55,16 @@ describe("devSSRHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     m.children.length = 0;
-    m.resolveRoute.mockReturnValue({
-      routeDir: "/tmp",
-      pageFile: "/tmp/page.tsx",
-      apiFile: "/tmp/api.ts",
-      params: { slug: "hello" },
-    });
-  });
-
-  it("returns 404 for non-GET requests", async () => {
-    const res = response();
-    await devSSRHandler({ url: "/", method: "POST" } as any, res as any);
-    expect(res.writeHead).toHaveBeenCalledWith(404);
-    expect(res.end).toHaveBeenCalledWith("Page not found");
-  });
-
-  it("returns 404 when no page exists", async () => {
-    m.resolveRoute.mockReturnValue(null);
-    const res = response();
-    await devSSRHandler({ url: "/", method: "GET" } as any, res as any);
-    expect(res.writeHead).toHaveBeenCalledWith(404);
   });
 
   it("forks a child and responds with rendered HTML", async () => {
     const url = nextUrl();
     const res = response();
-    await devSSRHandler({ url, method: "GET" } as any, res as any);
+    await devSSRHandler(
+      { url, method: "GET" } as any,
+      res as any,
+      request(url)
+    );
 
     expect(m.fork).toHaveBeenCalledTimes(1);
     const child = m.children[0];
@@ -109,13 +86,18 @@ describe("devSSRHandler", () => {
     const url = nextUrl();
     await devSSRHandler(
       { url, method: "GET" } as any,
-      response() as any
+      response() as any,
+      request(url)
     );
     const child = m.children[0];
     child.handlers.message({ type: "render", url, html: "one" });
 
     const res = response();
-    await devSSRHandler({ url, method: "GET" } as any, res as any);
+    await devSSRHandler(
+      { url, method: "GET" } as any,
+      res as any,
+      request(url)
+    );
 
     expect(m.fork).toHaveBeenCalledTimes(1);
     expect(child.send).toHaveBeenCalledTimes(2);
@@ -124,7 +106,11 @@ describe("devSSRHandler", () => {
   it("returns 500 when the child exits with pending requests", async () => {
     const url = nextUrl();
     const res = response();
-    await devSSRHandler({ url, method: "GET" } as any, res as any);
+    await devSSRHandler(
+      { url, method: "GET" } as any,
+      res as any,
+      request(url)
+    );
 
     m.children[0].handlers.exit(1, null);
 
@@ -133,9 +119,11 @@ describe("devSSRHandler", () => {
   });
 
   it("kills all page children when a route file changes", async () => {
+    const url = nextUrl();
     await devSSRHandler(
-      { url: nextUrl(), method: "GET" } as any,
-      response() as any
+      { url, method: "GET" } as any,
+      response() as any,
+      request(url)
     );
     const child = m.children[0];
 

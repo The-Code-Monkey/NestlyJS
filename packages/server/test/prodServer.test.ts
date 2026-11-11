@@ -46,7 +46,8 @@ vi.mock("../src/requestBody", async (importOriginal) => {
   return { ...actual, readRequestBody: m.readBody };
 });
 
-vi.mock("../src/staticAssets", () => ({
+vi.mock("../src/staticAssets", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/staticAssets")>()),
   isStaticAssetPath: m.isStatic,
   serveStaticAsset: m.serveStatic,
   serveClientAsset: m.serveClient,
@@ -255,6 +256,51 @@ describe("handleRequest", () => {
       "Content-Type": "application/json",
     });
     expect(res.end).toHaveBeenCalledWith('{"ok":true}');
+  });
+
+  it("keeps the original URL and params for the API handler", async () => {
+    const handler = vi.fn(async () => ({ status: 200, body: "ok" }));
+    const manifest = manifestWith({
+      routes: [
+        {
+          pattern: [
+            { kind: "static", value: "hooks" },
+            { kind: "dynamic", name: "id" },
+          ],
+          api: { entry: "api.js" },
+        },
+      ],
+    });
+
+    await handleRequest(
+      { url: "/hooks/1?x=1", method: "POST" } as any,
+      response() as any,
+      manifest,
+      root,
+      () => ({ POST: handler })
+    );
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "/hooks/1?x=1", params: { id: "1" } })
+    );
+  });
+
+  it("returns not found when the API method is missing", async () => {
+    const res = response();
+    const manifest = manifestWith({
+      routes: [{ pattern: [], api: { entry: "api.js" } }],
+    });
+
+    await handleRequest(
+      { url: "/", method: "POST" } as any,
+      res as any,
+      manifest,
+      root,
+      () => ({ GET: async () => ({ status: 200, body: "ok" }) })
+    );
+
+    expect(res.writeHead).toHaveBeenCalledWith(404);
+    expect(res.end).toHaveBeenCalledWith("API route not found");
   });
 
   it("passes the parsed body to the API handler", async () => {
