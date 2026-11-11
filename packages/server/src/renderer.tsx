@@ -1,7 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import path from "path";
-import fs from "fs";
+import { clientIdFor, isClientComponent } from "./pageGraph";
 
 export interface ClientInstance {
   id: string;
@@ -9,26 +8,8 @@ export interface ClientInstance {
   props: any;
 }
 
-export function isClientComponent(filePath: string) {
-  try {
-    const buf = fs.readFileSync(filePath, "utf8");
-    const firstStmt = buf
-      .split(/\r?\n/)
-      .slice(0, 10)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("//") && !line.startsWith("/*"))[0];
-    return /^['"]use client['"]\s*;?$/.test(firstStmt ?? "");
-  } catch {
-    return false;
-  }
-}
-
 export function serializeProps(props: any) {
   return JSON.stringify(props || {}).replace(/</g, "\\u003c");
-}
-
-export function clientIdFor(filePath: string) {
-  return path.relative(process.cwd(), filePath).split(path.sep).join("/");
 }
 
 export function attachFilePaths(mod: any, filePath: string) {
@@ -43,80 +24,6 @@ export function attachFilePaths(mod: any, filePath: string) {
     for (const key of Object.keys(mod)) maybeTag(mod[key]);
   }
   return mod;
-}
-
-export function getImports(filePath: string): string[] {
-  try {
-    const src = fs.readFileSync(filePath, "utf8");
-    const importRegex =
-      /import\s+(?:[\s\S]+?\s+from\s+)?['"]([^'"]+)['"]/g;
-    const imports: string[] = [];
-    let match;
-    while ((match = importRegex.exec(src))) {
-      const raw = match[1];
-      if (raw.startsWith(".")) {
-        const resolved = path.resolve(path.dirname(filePath), raw);
-        const extResolved =
-          fs.existsSync(resolved) && fs.statSync(resolved).isFile()
-            ? resolved
-            : [".tsx", ".ts", ".jsx", ".js", ".css"]
-                .map((ext) => resolved + ext)
-                .find((candidate) => fs.existsSync(candidate));
-        if (extResolved) imports.push(extResolved);
-      }
-    }
-    return imports;
-  } catch {
-    return [];
-  }
-}
-
-export function collectCss(
-  filePath: string,
-  seen = new Set<string>(),
-  skipClient = true
-): string[] {
-  if (!filePath || seen.has(filePath)) return [];
-  seen.add(filePath);
-  if (filePath.endsWith(".css")) return [filePath];
-  if (skipClient && isClientComponent(filePath)) return [];
-  return getImports(filePath).flatMap((imp) =>
-    collectCss(imp, seen, skipClient)
-  );
-}
-
-export function collectClientComponents(
-  filePath: string,
-  seen = new Set<string>(),
-  found = new Set<string>()
-): Set<string> {
-  if (!filePath || seen.has(filePath) || !fs.existsSync(filePath)) return found;
-  seen.add(filePath);
-  if (isClientComponent(filePath)) found.add(filePath);
-  for (const imp of getImports(filePath)) {
-    collectClientComponents(imp, seen, found);
-  }
-  return found;
-}
-
-export async function findLayoutComponents(urlPath: string) {
-  const layoutPaths: string[] = [];
-  let pathParts = urlPath.split("/").filter(Boolean);
-  const routesIndex = pathParts.findIndex((part) => part === "routes");
-  if (routesIndex === -1) return layoutPaths;
-  pathParts = pathParts.slice(routesIndex + 1);
-
-  for (let i = 0; i <= pathParts.length; i++) {
-    const layoutPath = path.resolve(
-      process.cwd(),
-      "routes",
-      ...pathParts.slice(0, i),
-      "layout.tsx"
-    );
-    if (fs.existsSync(layoutPath)) layoutPaths.push(layoutPath);
-  }
-
-  return layoutPaths.reverse();
 }
 
 export async function renderAndWrap(
@@ -188,7 +95,7 @@ export async function renderPageTree(
   params: Record<string, string | string[] | undefined>
 ) {
   let element: any = React.createElement(page, { params });
-  for (const Layout of layouts) {
+  for (const Layout of [...layouts].reverse()) {
     element = React.createElement(Layout, { children: element });
   }
 

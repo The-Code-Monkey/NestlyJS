@@ -4,6 +4,11 @@ import os from "os";
 import path from "path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import {
+  attachFilePaths,
+  renderAndWrap,
+  serializeProps,
+} from "../src/renderer";
 
 let root: string;
 const originalCwd = process.cwd();
@@ -69,7 +74,7 @@ describe("devChildWorker", () => {
     const html = await mod.renderPage(pageFile, "/");
 
     expect(html).toContain("home");
-    expect(html).toContain("body { color: black; }");
+    expect(html).toContain("color: black");
     expect(html).toContain("color: red");
     expect(html.match(/<script type="module">/g)).toHaveLength(1);
     expect(html.match(/data-client-component/g)).toHaveLength(2);
@@ -77,6 +82,57 @@ describe("devChildWorker", () => {
     expect(html).toContain("/_nestly/hmr");
 
     await expect(mod.renderPage(pageFile, "/")).resolves.toBe(html);
+  });
+
+  it("applies nested layouts from outermost to innermost", async () => {
+    write(
+      "routes/layout.tsx",
+      `export default function Layout({ children }: any) {
+  return <html><body><div id="outer">{children}</div></body></html>;
+}`
+    );
+    write(
+      "routes/nested/layout.tsx",
+      `export default function Layout({ children }: any) {
+  return <section id="inner">{children}</section>;
+}`
+    );
+    const pageFile = write(
+      "routes/nested/page.tsx",
+      `export default function Page() { return <h2>deep</h2>; }`
+    );
+    const mod = await load();
+
+    const html = await mod.renderPage(pageFile, "/nested");
+
+    expect(html.indexOf('id="outer"')).toBeLessThan(
+      html.indexOf('id="inner"')
+    );
+    expect(html.indexOf('id="inner"')).toBeLessThan(html.indexOf("deep"));
+  });
+
+  it("bundles conditional client components that do not render", async () => {
+    write(
+      "routes/conditional.tsx",
+      `"use client";
+export default function Conditional() { return <span>conditional</span>; }`
+    );
+    const pageFile = write(
+      "routes/page.tsx",
+      `import Conditional from "./conditional";
+export default function Page() {
+  const show = false;
+  return <div><h2>home</h2>{show && <Conditional />}</div>;
+}`
+    );
+    const mod = await load();
+
+    const html = await mod.renderPage(pageFile, "/");
+
+    expect(html).toContain("home");
+    expect(html).not.toContain("conditional</span>");
+    expect(html).not.toContain("data-client-component");
+    expect(html).toContain("routes/conditional.tsx");
   });
 
   it("renders async server components and prepends CSS without a head", async () => {
@@ -220,45 +276,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     (process as any).send = original;
   });
 
-  it("serializes props safely", async () => {
-    const mod = await load();
-    expect(mod.serializeProps(null)).toBe("{}");
-    expect(mod.serializeProps({ html: "</script>" })).toContain("\\u003c");
-  });
-
-  it("detects client component directives", async () => {
-    const client = write("client.tsx", '"use client";\nexport default 1;');
-    const server = write("server.tsx", "export default 1;");
-    const mod = await load();
-
-    expect(mod.isClientComponent(client)).toBe(true);
-    expect(mod.isClientComponent(server)).toBe(false);
-    expect(mod.isClientComponent(path.join(root, "missing.tsx"))).toBe(false);
-  });
-
-  it("collects imports and CSS", async () => {
-    write("styles.css", "a { color: red; }");
-    write("nested.ts", "export default 1;");
-    const entry = write(
-      "entry.tsx",
-      `import "./styles.css";
-import "./nested";
-import "react";
-import "./missing";`
-    );
-    const client = write("client.tsx", '"use client";\nimport "./styles.css";');
-    const mod = await load();
-
-    expect(mod.getImports(entry)).toEqual([
-      path.join(root, "styles.css"),
-      path.join(root, "nested.ts"),
-    ]);
-    expect(mod.getImports(path.join(root, "missing.tsx"))).toEqual([]);
-    expect(mod.collectCss(entry)).toEqual([path.join(root, "styles.css")]);
-    expect(mod.collectCss(client)).toEqual([]);
-    expect(mod.collectCss("")).toEqual([]);
-    const seen = new Set([entry]);
-    expect(mod.collectCss(entry, seen)).toEqual([]);
+  it("serializes props safely", () => {
+    expect(serializeProps(null)).toBe("{}");
+    expect(serializeProps({ html: "</script>" })).toContain("\\u003c");
   });
 
   it("preloads modules with file paths", async () => {
@@ -275,43 +295,34 @@ import "./missing";`
     expect(mod.preloadModule(client)).toBe(loaded);
   });
 
-  it("attaches file paths to functions and objects", async () => {
-    const mod = await load();
-
-    expect(mod.attachFilePaths(null, "/x")).toBeNull();
+  it("attaches file paths to functions and objects", () => {
+    expect(attachFilePaths(null, "/x")).toBeNull();
     const fn: any = () => null;
-    expect(mod.attachFilePaths(fn, "/fn")).toBe(fn);
+    expect(attachFilePaths(fn, "/fn")).toBe(fn);
     expect(fn.__filePath).toBe("/fn");
 
     const tagged: any = () => null;
     tagged.__filePath = "/kept";
     const obj = { a: tagged, b: () => null, c: 1 };
-    mod.attachFilePaths(obj, "/obj");
+    attachFilePaths(obj, "/obj");
     expect(tagged.__filePath).toBe("/kept");
     expect(obj.b.__filePath).toBe("/obj");
   });
 
-  it("finds no layouts when the path has no routes segment", async () => {
-    const mod = await load();
-    await expect(mod.findLayoutComponents("/foo/bar")).resolves.toEqual([]);
-  });
-
   it("wraps arrays, primitives, and host elements", async () => {
-    const mod = await load();
-
-    expect(await mod.renderAndWrap(null)).toBeNull();
-    expect(await mod.renderAndWrap("text")).toBe("text");
+    expect(await renderAndWrap(null)).toBeNull();
+    expect(await renderAndWrap("text")).toBe("text");
     expect(
-      renderToStaticMarkup(await mod.renderAndWrap(React.createElement("br")))
+      renderToStaticMarkup(await renderAndWrap(React.createElement("br")))
     ).toBe("<br/>");
 
-    const unkeyed = await mod.renderAndWrap([
+    const unkeyed = await renderAndWrap([
       React.createElement("div", null, "a"),
       React.createElement("div", null, "b"),
     ]);
     expect(unkeyed.map((el: any) => el.key)).toEqual(["0", "1"]);
 
-    const keyed = await mod.renderAndWrap([
+    const keyed = await renderAndWrap([
       React.createElement("div", { key: "keep" }, "a"),
     ]);
     expect(keyed[0].key).toBe("keep");
@@ -325,15 +336,12 @@ import "./missing";`
     const mod = await load();
     const component = mod.preloadModule(client).default;
 
-    const wrapped = await mod.renderAndWrap(
-      React.createElement(component, {})
-    );
+    const wrapped = await renderAndWrap(React.createElement(component, {}));
 
     expect(wrapped.props["data-client-component"]).toBe("client.tsx-0");
   });
 
   it("renders sync and async server components", async () => {
-    const mod = await load();
     function Sync() {
       return React.createElement("b", null, "sync");
     }
@@ -341,8 +349,8 @@ import "./missing";`
       return React.createElement("i", null, "async");
     }
 
-    const sync = await mod.renderAndWrap(React.createElement(Sync));
-    const asyncEl = await mod.renderAndWrap(React.createElement(Async));
+    const sync = await renderAndWrap(React.createElement(Sync));
+    const asyncEl = await renderAndWrap(React.createElement(Async));
 
     expect(renderToStaticMarkup(sync)).toBe("<b>sync</b>");
     expect(renderToStaticMarkup(asyncEl)).toBe("<i>async</i>");

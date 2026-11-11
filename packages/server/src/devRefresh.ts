@@ -1,11 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { build, type Plugin } from "esbuild";
-import {
-  clientIdFor,
-  collectClientComponents,
-  findLayoutComponents,
-} from "./renderer";
+import { clientIdFor, getPageGraph } from "./pageGraph";
 import { resolveRoute } from "./routeResolver";
 
 const { transformAsync } = require("@babel/core") as any;
@@ -17,7 +13,6 @@ export interface ClientComponentEntry {
 
 export interface ClientScript {
   js: string;
-  css: string;
 }
 
 function namedExports(moduleValue: any, globalExpression: string) {
@@ -164,7 +159,7 @@ window.ReactJSXRuntime = JSXRuntime;
 export async function bundleClientScript(
   components: ClientComponentEntry[]
 ): Promise<ClientScript> {
-  if (components.length === 0) return { js: "", css: "" };
+  if (components.length === 0) return { js: "" };
 
   const unique = new Map<string, string>();
   for (const component of components) {
@@ -209,31 +204,23 @@ ${registrations}
 
   const files = result.outputFiles ?? [];
   const js = files.find((file) => file.path.endsWith(".js"))?.text ?? "";
-  const css = files.find((file) => file.path.endsWith(".css"))?.text ?? "";
 
-  return { js, css };
+  return { js };
 }
 
 export async function buildClientScriptForUrl(urlPath: string) {
   const route = resolveRoute(urlPath);
   if (!route || !fs.existsSync(route.pageFile)) return null;
 
-  const layoutPaths = await findLayoutComponents(
-    route.pageFile.replace("page.tsx", "")
-  );
-  const clientFiles = new Set<string>();
-  collectClientComponents(route.pageFile, undefined, clientFiles);
-  for (const layoutPath of layoutPaths) {
-    collectClientComponents(layoutPath, undefined, clientFiles);
-  }
-
-  if (clientFiles.size === 0) return "";
+  const graph = getPageGraph(route.pageFile);
+  if (graph.clientFiles.length === 0) return "";
 
   return (
     await bundleClientScript(
-      [...clientFiles]
-        .sort()
-        .map((filePath) => ({ id: clientIdFor(filePath), filePath }))
+      graph.clientFiles.map((filePath) => ({
+        id: clientIdFor(filePath),
+        filePath,
+      }))
     )
   ).js;
 }

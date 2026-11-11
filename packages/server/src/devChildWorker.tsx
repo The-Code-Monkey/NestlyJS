@@ -1,34 +1,21 @@
 // frontend.child.worker.ts
-import React from "react";
 import fs from "fs";
-import path from "path";
-import { bundlePageClient } from "./bundler";
+import { bundleCssFiles, bundlePageClient } from "./bundler";
 import { hmrClientScript } from "./hmr";
 import {
   attachFilePaths,
-  collectCss,
-  findLayoutComponents,
-  getImports,
   hydrationScript,
   injectBody,
   injectHead,
-  isClientComponent,
   renderPageTree,
-  serializeProps,
 } from "./renderer";
-import type { RouteParams } from "./routeResolver";
-
-export {
-  attachFilePaths,
-  collectCss,
-  findLayoutComponents,
-  getImports,
-  isClientComponent,
-  renderAndWrap,
-  serializeProps,
-  renderPageTree,
+import {
   clientIdFor,
-} from "./renderer";
+  getImports,
+  getPageGraph,
+  type PageGraph,
+} from "./pageGraph";
+import type { RouteParams } from "./routeResolver";
 
 console.log(`[CHILD ${process.pid}] Booting SSR child worker`);
 
@@ -51,6 +38,7 @@ export function preloadModule(filePath: string) {
 let cachedHtml: string | null = null;
 let cachedBundle: Awaited<ReturnType<typeof bundlePageClient>> | null = null;
 let cachedStyle: string | null = null;
+let cachedGraph: PageGraph | null = null;
 
 export async function renderPage(
   file: string,
@@ -62,13 +50,11 @@ export async function renderPage(
 
     preloadModule(file);
 
-    const layoutPaths = await findLayoutComponents(
-      file.replace("page.tsx", "")
-    );
-    for (const layoutPath of layoutPaths) preloadModule(layoutPath);
+    const graph = (cachedGraph ??= getPageGraph(file));
+    for (const layoutPath of graph.layouts) preloadModule(layoutPath);
 
     const pageModule = preloadedModules.get(file);
-    const layoutModules = layoutPaths.map(
+    const layoutModules = graph.layouts.map(
       (layoutPath) => preloadedModules.get(layoutPath).default
     );
 
@@ -80,29 +66,17 @@ export async function renderPage(
     let finalHTML = html;
 
     if (cachedBundle === null) {
-      const components = new Map<string, string>();
-      for (const instance of instances) {
-        if (!components.has(instance.id)) {
-          components.set(instance.id, path.resolve(process.cwd(), instance.id));
-        }
-      }
       cachedBundle = await bundlePageClient(
-        [...components].map(([id, filePath]) => ({ id, filePath }))
+        graph.clientFiles.map((filePath) => ({
+          id: clientIdFor(filePath),
+          filePath,
+        }))
       );
     }
     const bundle = cachedBundle;
 
     if (cachedStyle === null) {
-      const seenCss = new Set<string>();
-      const serverCss = [
-        ...layoutPaths.flatMap((layoutPath) => collectCss(layoutPath)),
-        ...collectCss(file),
-      ]
-        .filter((cssFile) => !seenCss.has(cssFile) && seenCss.add(cssFile))
-        .map((cssFile) => fs.readFileSync(cssFile, "utf8"))
-        .join("\n");
-
-      cachedStyle = [serverCss, bundle.css].filter(Boolean).join("\n");
+      cachedStyle = await bundleCssFiles(graph.cssFiles);
     }
 
     finalHTML = injectHead(
