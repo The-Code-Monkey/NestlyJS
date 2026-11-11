@@ -15,7 +15,7 @@ import {
   getPageGraph,
   type PageGraph,
 } from "./pageGraph";
-import type { RouteParams } from "./routeResolver";
+import type { RouteParams } from "./routePatterns";
 
 console.log(`[CHILD ${process.pid}] Booting SSR child worker`);
 

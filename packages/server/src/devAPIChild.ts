@@ -1,4 +1,4 @@
-import type { RouteParams } from "./routeResolver";
+import type { RouteParams } from "./routePatterns";
 
 console.log(`[CHILD ${process.pid}] Booting API child worker`);
 

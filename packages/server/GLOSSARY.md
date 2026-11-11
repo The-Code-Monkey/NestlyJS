@@ -32,6 +32,10 @@ _Avoid_: Layout folder, namespace folder
 The named values captured from a dynamic route's URL segments.
 _Avoid_: Query params, search params, URL variables
 
+**Route Pattern**:
+The ordered segment kinds of a Route, used to match URL segments and rank precedence.
+_Avoid_: Route template, path pattern, URL mask
+
 **Static Asset**:
 A file served from the Public Directory, addressed by a URL path that ends with a file extension.
 _Avoid_: Resource, media file
