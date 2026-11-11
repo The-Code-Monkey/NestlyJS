@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { build } from "esbuild";
 import { bundleCssFiles } from "./bundler";
 import { clientIdFor, getPageGraph } from "./pageGraph";
-import { classifySegment } from "./routePatterns";
+import { toPatternSegment } from "./routePatterns";
 import type {
   ApiAssets,
   Manifest,
@@ -48,35 +48,12 @@ function collectRouteDirs(
 
   for (const entry of entries) {
     const child = path.join(dir, entry.name);
-    const info = classifySegment(entry.name);
-
-    if (info.kind === "group") {
-      collectRouteDirs(child, pattern, routes);
-    } else if (info.kind === "static") {
-      collectRouteDirs(
-        child,
-        [...pattern, { kind: "static", value: entry.name }],
-        routes
-      );
-    } else if (info.kind === "dynamic") {
-      collectRouteDirs(
-        child,
-        [...pattern, { kind: "dynamic", name: info.name! }],
-        routes
-      );
-    } else if (info.kind === "catchAll") {
-      collectRouteDirs(
-        child,
-        [...pattern, { kind: "catchAll", name: info.name! }],
-        routes
-      );
-    } else {
-      collectRouteDirs(
-        child,
-        [...pattern, { kind: "optionalCatchAll", name: info.name! }],
-        routes
-      );
-    }
+    const segment = toPatternSegment(entry.name);
+    collectRouteDirs(
+      child,
+      segment ? [...pattern, segment] : pattern,
+      routes
+    );
   }
 
   return routes;

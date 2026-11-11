@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
 import {
-  classifySegment,
-  compareScore,
+  bestMatch,
   parseUrlSegments,
+  toPatternSegment,
+  type PatternSegment,
+  type RouteParams,
 } from "./routePatterns";
 
 export interface RouteFiles {
@@ -12,10 +14,13 @@ export interface RouteFiles {
   apiFile: string;
 }
 
-export type RouteParams = Record<string, string | string[] | undefined>;
-
 export interface ResolvedRoute extends RouteFiles {
   params: RouteParams;
+}
+
+interface RouteCandidate {
+  routeDir: string;
+  pattern: PatternSegment[];
 }
 
 function isDirectory(filePath: string) {
@@ -40,120 +45,48 @@ function childDirectories(dir: string) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-interface Match {
-  dir: string;
-  params: RouteParams;
-  score: number[];
-}
-
 /**
- * Collects every route that matches the URL. Groups consume no URL segment.
- * Score marks per-segment specificity so static routes beat dynamic ones,
- * dynamic beats catch-all, and catch-all beats optional catch-all.
+ * Filesystem adapter: collects route directories with their patterns in
+ * directory-name order, then delegates matching and ranking to the Route
+ * Pattern module.
  */
-function collectMatches(
+function collectCandidates(
   dir: string,
-  segments: string[],
-  params: RouteParams,
-  score: number[],
-  matches: Match[]
+  pattern: PatternSegment[],
+  candidates: RouteCandidate[]
 ) {
   if (!isDirectory(dir)) return;
-
-  if (segments.length === 0) {
-    if (hasRouteFile(dir)) matches.push({ dir, params, score });
-
-    for (const entry of childDirectories(dir)) {
-      const info = classifySegment(entry.name);
-      const child = path.join(dir, entry.name);
-
-      if (info.kind === "group") {
-        collectMatches(child, segments, params, score, matches);
-      } else if (info.kind === "optionalCatchAll") {
-        collectMatches(
-          child,
-          segments,
-          { ...params, [info.name!]: undefined },
-          [...score, 3],
-          matches
-        );
-      }
-    }
-    return;
-  }
-
-  const [segment, ...rest] = segments;
+  if (hasRouteFile(dir)) candidates.push({ routeDir: dir, pattern });
 
   for (const entry of childDirectories(dir)) {
-    const info = classifySegment(entry.name);
-    const child = path.join(dir, entry.name);
-
-    if (info.kind === "group") {
-      collectMatches(child, segments, params, score, matches);
-    }
-  }
-
-  const staticChild = path.join(dir, segment);
-  if (
-    classifySegment(segment).kind === "static" &&
-    isDirectory(staticChild)
-  ) {
-    collectMatches(staticChild, rest, params, [...score, 0], matches);
-  }
-
-  for (const entry of childDirectories(dir)) {
-    const info = classifySegment(entry.name);
-    const child = path.join(dir, entry.name);
-
-    if (info.kind === "dynamic") {
-      collectMatches(
-        child,
-        rest,
-        { ...params, [info.name!]: segment },
-        [...score, 1],
-        matches
-      );
-    } else if (info.kind === "catchAll") {
-      collectMatches(
-        child,
-        [],
-        { ...params, [info.name!]: segments },
-        [...score, 2],
-        matches
-      );
-    } else if (info.kind === "optionalCatchAll") {
-      collectMatches(
-        child,
-        [],
-        { ...params, [info.name!]: segments },
-        [...score, 3],
-        matches
-      );
-    }
+    const segment = toPatternSegment(entry.name);
+    collectCandidates(
+      path.join(dir, entry.name),
+      segment ? [...pattern, segment] : pattern,
+      candidates
+    );
   }
 }
 
 /**
  * Resolves a URL path to the closest route directory and its params.
- * Follows Next.js-style precedence: static, dynamic `[param]`, catch-all
- * `[...param]`, then optional catch-all `[[...param]]`. Route groups `(name)`
- * organize files and layouts without adding a URL segment.
+ * Precedence comes from the Route Pattern module, so dev and production
+ * rank segment kinds the same way.
  */
 export function resolveRoute(urlPath: string): ResolvedRoute | null {
   const segments = parseUrlSegments(urlPath);
   if (!segments) return null;
 
-  const matches: Match[] = [];
-  collectMatches(path.join(process.cwd(), "routes"), segments, {}, [], matches);
-  if (matches.length === 0) return null;
+  const candidates: RouteCandidate[] = [];
+  collectCandidates(path.join(process.cwd(), "routes"), [], candidates);
 
-  matches.sort((left, right) => compareScore(left.score, right.score));
-  const best = matches[0];
+  const best = bestMatch(candidates, segments);
+  if (!best) return null;
 
   return {
-    routeDir: best.dir,
-    pageFile: path.join(best.dir, "page.tsx"),
-    apiFile: path.join(best.dir, "api.ts"),
+    routeDir: best.routeDir,
+    pageFile: path.join(best.routeDir, "page.tsx"),
+    apiFile: path.join(best.routeDir, "api.ts"),
     params: best.params,
   };
 }
