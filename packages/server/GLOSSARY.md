@@ -68,6 +68,18 @@ _Avoid_: Style HMR, CSS injection
 A development update that replaces changed client components while preserving their React state.
 _Avoid_: Hot reload, live reload
 
+**Request Body**:
+The parsed payload passed to an API handler as `body`. JSON content types parse to values; others stay text.
+_Avoid_: Payload, input
+
+**HTML Cache**:
+An in-memory production cache of rendered page HTML keyed by URL path.
+_Avoid_: Page cache, SSR cache
+
+**Graceful Shutdown**:
+Stopping acceptance of new work, letting in-flight requests finish, then exiting.
+_Avoid_: Hard stop, kill
+
 **Layout**:
 A React wrapper declared by `layout.tsx` in a route directory. Layouts apply to pages in that directory and its descendants.
 _Avoid_: Shell, template

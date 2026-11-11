@@ -2,6 +2,7 @@
 import http from "http";
 import { fork, ChildProcess } from "child_process";
 import { getAPIRoute } from "./routeResolver";
+import { RequestBodyError, readRequestBody } from "./requestBody";
 import fs from "fs";
 import path from "path";
 
@@ -22,6 +23,18 @@ export async function devAPIHandler(
     res.writeHead(404);
     res.end("API route not found");
     return;
+  }
+
+  let body: unknown;
+  try {
+    body = await readRequestBody(req);
+  } catch (err) {
+    if (err instanceof RequestBodyError) {
+      res.writeHead(err.status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
+    throw err;
   }
 
   const key = `${method}:${urlPath}`;
@@ -92,6 +105,8 @@ export async function devAPIHandler(
     file: apiFile,
     method,
     url: req.url,
+    headers: req.headers,
+    body,
     params: api.route.params,
   });
 }

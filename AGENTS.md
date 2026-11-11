@@ -28,6 +28,9 @@ Working:
 - Non-GET API requests resolve to named method exports in `api.ts`.
 - Dynamic routes (`[param]`, `[...param]`, `[[...param]]`) capture route params; route groups `(name)` group files without affecting the URL.
 - Static assets in `public/` are served by extension-addressed paths with `GET` and `HEAD`.
+- API handlers receive parsed JSON or text request bodies, limited to 1 MB.
+- Production renders pass through an in-memory HTML cache (`NESTLY_HTML_CACHE_SIZE`, default 100, 0 disables).
+- `nestly dev` and `nestly start` accept `--host` or `HOST` and shut down gracefully on SIGTERM/SIGINT.
 - Query strings and fragments are ignored during route lookup.
 - Dev changes trigger live reload over SSE; route CSS changes hot swap without reload.
 - Client component changes Fast Refresh while preserving React state.
@@ -47,7 +50,9 @@ Working:
 - `src/build.ts` — production build: compiles route entries, emits hashed client bundles and CSS, writes `.nestly/manifest.json`.
 - `src/manifest.ts` — internal manifest types shared by build and runtime.
 - `src/prodRouter.ts` — matches URL paths against manifest route patterns with the same precedence as the dev resolver.
-- `src/prodServer.ts` — clustered production server: static assets, built client assets, SSR pages, API handlers, 404s.
+- `src/prodServer.ts` — clustered production server: static assets, built client assets, cached SSR pages, API handlers, graceful shutdown, 404s.
+- `src/requestBody.ts` — reads and parses API request bodies with a 1 MB limit.
+- `src/htmlCache.ts` — small LRU cache for production page HTML.
 - `src/devAPIWorker.ts` — forks one child per `METHOD:URL`, watches the API file, and queues pending responses.
 - `src/devAPIChild.ts` — dynamically imports the API file and invokes the named HTTP method export with `method`, `url`, `headers`, `body`, and `params`. The handler must return `{ status, body }`.
 
@@ -87,7 +92,7 @@ yarn changeset
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
 - Fast Refresh applies to client components. Page, layout, API, and public asset changes still reload. State resets when hook order changes.
 - Nested layout resolution relies on string replacement and cwd-relative paths.
-- Worker failures are surfaced as generic 500 responses.
+- Worker failures are surfaced as generic 500 responses. Custom 404/500 pages are not implemented.
 
 ## Rules for agents
 
@@ -98,3 +103,17 @@ yarn changeset
 - Run the server build, unit tests, and a dev-server smoke test after behavior changes. Run the production build/start suite for runtime changes.
 - Do not assume the production path works.
 - Prefer fixing the existing architecture over layering new abstractions on stale files.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `The-Code-Monkey/NestlyJS`, via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five roles, label strings unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: root `GLOSSARY-MAP.md` points to per-context glossaries; system-wide ADRs in `docs/adr/`. See `docs/agents/domain.md`.

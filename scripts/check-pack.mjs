@@ -37,6 +37,7 @@ const required = [
   "dist/devSSRWorker.js",
   "dist/devRefresh.js",
   "dist/hmr.js",
+  "dist/htmlCache.js",
   "dist/manifest.js",
   "dist/prodRouter.js",
   "dist/routePatterns.js",

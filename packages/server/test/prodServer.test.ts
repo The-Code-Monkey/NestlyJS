@@ -7,12 +7,16 @@ const m = vi.hoisted(() => ({
   state: { isPrimary: true },
   fork: vi.fn(),
   on: vi.fn(),
+  removeAllListeners: vi.fn(),
+  disconnect: vi.fn((cb?: () => void) => cb?.()),
   createServer: vi.fn(),
-  listen: vi.fn((_port: number, cb?: () => void) => cb?.()),
+  close: vi.fn((cb?: () => void) => cb?.()),
+  listen: vi.fn((_port: number, _host?: string, cb?: () => void) => cb?.()),
   cpus: vi.fn(() => [{}, {}]),
   isStatic: vi.fn(),
   serveStatic: vi.fn(),
   serveClient: vi.fn(),
+  readBody: vi.fn(),
 }));
 
 vi.mock("cluster", () => ({
@@ -22,6 +26,8 @@ vi.mock("cluster", () => ({
     },
     fork: m.fork,
     on: m.on,
+    removeAllListeners: m.removeAllListeners,
+    disconnect: m.disconnect,
   },
 }));
 
@@ -29,12 +35,17 @@ vi.mock("http", () => ({
   default: {
     createServer: (handler: any) => {
       m.createServer(handler);
-      return { listen: m.listen };
+      return { listen: m.listen, close: m.close };
     },
   },
 }));
 
 vi.mock("os", () => ({ default: { cpus: m.cpus } }));
+vi.mock("../src/requestBody", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/requestBody")>();
+  return { ...actual, readRequestBody: m.readBody };
+});
+
 vi.mock("../src/staticAssets", () => ({
   isStaticAssetPath: m.isStatic,
   serveStaticAsset: m.serveStatic,
@@ -48,6 +59,8 @@ import {
   start,
 } from "../src/prodServer";
 import type { Manifest } from "../src/manifest";
+import { HtmlCache } from "../src/htmlCache";
+import { RequestBodyError } from "../src/requestBody";
 
 let root: string;
 const originalCwd = process.cwd();
@@ -58,6 +71,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.state.isPrimary = true;
   m.isStatic.mockReturnValue(false);
+  m.readBody.mockResolvedValue(undefined);
+  vi.spyOn(process, "exit").mockImplementation((() => undefined) as any);
+  vi.spyOn(process, "once").mockImplementation((() => process) as any);
 });
 
 afterEach(() => {
@@ -241,6 +257,80 @@ describe("handleRequest", () => {
     expect(res.end).toHaveBeenCalledWith('{"ok":true}');
   });
 
+  it("passes the parsed body to the API handler", async () => {
+    m.readBody.mockResolvedValue({ value: 1 });
+    const handler = vi.fn(async () => ({ status: 200, body: "ok" }));
+    const manifest = manifestWith({
+      routes: [{ pattern: [], api: { entry: "api.js" } }],
+    });
+
+    await handleRequest(
+      { url: "/", method: "POST", headers: { a: "b" } } as any,
+      response() as any,
+      manifest,
+      root,
+      () => ({ POST: handler })
+    );
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { value: 1 } })
+    );
+  });
+
+  it("returns a body parsing error", async () => {
+    m.readBody.mockRejectedValue(
+      new RequestBodyError(400, "Invalid JSON")
+    );
+    const res = response();
+    const manifest = manifestWith({
+      routes: [{ pattern: [], api: { entry: "api.js" } }],
+    });
+
+    await handleRequest(
+      { url: "/", method: "POST" } as any,
+      res as any,
+      manifest,
+      root,
+      () => ({ POST: async () => ({ status: 200, body: "ok" }) })
+    );
+
+    expect(res.writeHead).toHaveBeenCalledWith(400, {
+      "Content-Type": "application/json",
+    });
+    expect(res.end).toHaveBeenCalledWith('{"error":"Invalid JSON"}');
+  });
+
+  it("caches rendered HTML", async () => {
+    const page = () => React.createElement("h1", null, "cached");
+    const load = vi.fn(() => ({ page, layouts: [] }));
+    const cache = new HtmlCache(10);
+    const manifest = manifestWith({
+      routes: [{ pattern: [], page: { entry: "page.js" } }],
+    });
+
+    const first = response();
+    await handleRequest(
+      { url: "/", method: "GET" } as any,
+      first as any,
+      manifest,
+      root,
+      load,
+      cache
+    );
+    const second = response();
+    await handleRequest(
+      { url: "/", method: "GET" } as any,
+      second as any,
+      manifest,
+      root,
+      load,
+      cache
+    );
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(second.end).toHaveBeenCalledWith(first.end.mock.calls[0][0]);
+  });
+
   it("defaults the API status to 200", async () => {
     const res = response();
     const manifest = manifestWith({
@@ -343,23 +433,26 @@ describe("start", () => {
 
   it("exits when no build output exists", () => {
     m.state.isPrimary = false;
-    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as any);
     vi.spyOn(console, "error").mockImplementation(() => {});
     fs.rmSync(path.join(root, ".nestly"), { recursive: true, force: true });
 
     start({ port: 4100 });
 
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(process.exit).toHaveBeenCalledWith(1);
   });
 
   it("creates a worker server", async () => {
     m.state.isPrimary = false;
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    start({ port: 4100 });
+    start({ port: 4100, host: "0.0.0.0" });
 
     expect(m.createServer).toHaveBeenCalledWith(expect.any(Function));
-    expect(m.listen).toHaveBeenCalledWith(4100, expect.any(Function));
+    expect(m.listen).toHaveBeenCalledWith(
+      4100,
+      "0.0.0.0",
+      expect.any(Function)
+    );
 
     const handler = m.createServer.mock.calls[0][0];
     const res = response();
@@ -367,5 +460,42 @@ describe("start", () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(res.writeHead).toHaveBeenCalledWith(404);
+  });
+
+  it("shuts down the primary process", () => {
+    vi.useFakeTimers();
+    start({ port: 3000, totalWorkers: 1 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
+    shutdown();
+    vi.advanceTimersByTime(5000);
+
+    expect(m.removeAllListeners).toHaveBeenCalledWith("exit");
+    expect(m.disconnect).toHaveBeenCalled();
+    expect(process.exit).toHaveBeenCalledWith(0);
+    expect(process.exit).toHaveBeenLastCalledWith(1);
+    vi.useRealTimers();
+  });
+
+  it("shuts down a worker server", () => {
+    vi.useFakeTimers();
+    m.state.isPrimary = false;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    start({ port: 4100 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
+    shutdown();
+    vi.advanceTimersByTime(5000);
+
+    expect(m.close).toHaveBeenCalled();
+    expect(process.exit).toHaveBeenCalledWith(0);
+    expect(process.exit).toHaveBeenLastCalledWith(1);
+    vi.useRealTimers();
   });
 });

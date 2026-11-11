@@ -112,6 +112,8 @@ npx nestly start --port=3000
 
 `nestly start` reads `.nestly/manifest.json`, so run `nestly build` first.
 
+Production page HTML is cached in memory. Set `NESTLY_HTML_CACHE_SIZE` to change the limit (default 100, `0` disables). Both servers accept `--host` or `HOST`. SIGTERM/SIGINT trigger graceful shutdown.
+
 ## Routes
 
 - `routes/page.tsx` → `/`
@@ -124,7 +126,7 @@ npx nestly start --port=3000
 
 Precedence: static, dynamic, catch-all, optional catch-all. Route groups add no URL segment.
 
-Pages and layouts use a default export. Pages receive `{ params }`. API handlers receive `{ method, url, headers, body, params }` and return `{ status, body }`.
+Pages and layouts use a default export. Pages receive `{ params }`. API handlers receive `{ method, url, headers, body, params }` and return `{ status, body }`. JSON request bodies are parsed; other bodies arrive as text. Bodies are limited to 1 MB, and invalid JSON returns 400.
 
 ## Static assets
 
