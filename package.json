@@ -17,7 +17,7 @@
     "packages/*"
   ],
   "devDependencies": {
-    "@changesets/cli": "2.31.1",
+    "@changesets/cli": "3.0.3",
     "@vitest/coverage-v8": "^5.1.0",
     "jsdom": "31",
     "react": "19.3.1",
