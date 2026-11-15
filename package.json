@@ -3,7 +3,8 @@
   "private": true,
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "pnpm": ">=12"
   },
   "repository": {
     "type": "git",
@@ -13,9 +14,6 @@
     "url": "https://github.com/The-Code-Monkey/NestlyJS/issues"
   },
   "homepage": "https://github.com/The-Code-Monkey/NestlyJS#readme",
-  "workspaces": [
-    "packages/*"
-  ],
   "devDependencies": {
     "@changesets/cli": "2.31.1",
     "@vitest/coverage-v8": "^5.1.0",
@@ -27,10 +25,10 @@
   },
   "scripts": {
     "changeset": "changeset",
-    "build": "yarn workspaces run build",
+    "build": "pnpm -r run build",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "check:install": "node scripts/check-install.mjs"
   },
-  "packageManager": "yarn@1.22.22"
+  "packageManager": "pnpm@12.21.0"
 }

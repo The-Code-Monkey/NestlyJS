@@ -110,7 +110,8 @@ async function buildIife(contents: string) {
   const result = await build({
     stdin: {
       contents,
-      resolveDir: process.cwd(),
+      // Resolve React and react-refresh from the server package, not the app.
+      resolveDir: path.resolve(__dirname, ".."),
       sourcefile: "nestly-dev-runtime.js",
       loader: "js",
     },

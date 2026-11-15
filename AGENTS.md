@@ -6,7 +6,7 @@ Onboarding guide for agents working on NestlyJS.
 
 NestlyJS is an experimental full-stack framework for React websites, inspired by Next.js and NestJS but intended to stay simple. It provides file-based SSR pages and API routes, served by a cluster of Node.js workers.
 
-The repository is a Yarn 1 workspace monorepo:
+The repository is a pnpm workspace monorepo:
 
 - `packages/server` — publishable `@nestlyjs/server` package and `nestly` CLI.
 - `packages/test-app` — private integration fixture used by CI.
@@ -25,6 +25,8 @@ Working:
 - `"use client"` components render static markup and hydrate from one page bundle.
 - Plain CSS imports from pages, layouts, and client components are inlined per page.
 - Pages cache HTML, JavaScript, and CSS until a file under `routes/` changes.
+- Dev and production assemble documents through one Page Document module; only their asset plans and caches differ.
+- Dev page and API children share queue, crash, and recreation behavior through one Supervised Child module.
 - Non-GET API requests resolve to named method exports in `api.ts`.
 - Dynamic routes (`[param]`, `[...param]`, `[[...param]]`) capture route params; route groups `(name)` group files without affecting the URL.
 - Static assets in `public/` are served by extension-addressed paths with `GET` and `HEAD`.
@@ -42,34 +44,36 @@ Working:
 - `src/staticAssets.ts` — streams files from `process.cwd()/public` and `.nestly/client`, maps extensions to content types, and rejects traversal and symlink escapes.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
 - `src/requestPipeline.ts` — turns a URL and method into one decision: client asset, static asset, Page, API route, or not found, with params and route identity. Dev and production executors consume the decision instead of resolving again.
-- `src/devSSRWorker.ts` — forks one child per URL path, passes route params, registers `ts-node/register`, watches all of `routes/`, and queues pending responses. Any route change restarts page children.
-- `src/renderer.tsx` — shared SSR helpers: client detection, layout discovery, element walking, client wrapping, hydration markup, and asset injection.
-- `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and inlines assets and the HMR client in development.
+- `src/devSSRWorker.ts` — forks one child per URL path through `supervisedChild`, passes route params, registers `ts-node/register`, watches all of `routes/`, and kills page children on any route change.
+- `src/renderer.tsx` — shared SSR helpers: element walking, client wrapping, and rendered-page output.
+- `src/pageDocument.ts` — pure Page Document assembly: head and body injection order plus hydration markup. Dev and production adapters supply different asset plans.
+- `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and supplies the development asset plan.
 - `src/hmr.ts` — dev SSE endpoint, file watcher, live reload, CSS hot-swap, and Fast Refresh payloads.
 - `src/devRefresh.ts` — dev bundler plugins: esbuild global React mapping, `react-refresh` Babel transforms, runtime preamble, and page client bundles.
 - `src/bundler.ts` — bundles all client components on a page into a single dev bundle; `src/shim.ts` exposes React globals in the browser.
 - `src/build.ts` — production build: compiles route entries, emits hashed client bundles and CSS, writes `.nestly/manifest.json`.
 - `src/manifest.ts` — internal manifest types shared by build and runtime.
 - `src/prodRouter.ts` — matches URL paths against manifest route patterns with the same precedence as the dev resolver.
-- `src/prodServer.ts` — clustered production server: static assets, built client assets, cached SSR pages, API handlers, graceful shutdown, 404s.
+- `src/prodServer.ts` — clustered production server: static assets, built client assets, cached SSR pages, API handlers, graceful shutdown, 404s. Supplies the production asset plan to the Page Document module.
 - `src/requestBody.ts` — reads and parses API request bodies with a 1 MB limit.
 - `src/htmlCache.ts` — small LRU cache for production page HTML.
-- `src/devAPIWorker.ts` — forks one child per `METHOD:URL`, watches the API file, and queues pending responses.
+- `src/devAPIWorker.ts` — forks one child per `METHOD:URL` through `supervisedChild` and watches the API file.
+- `src/supervisedChild.ts` — owns the development child map, pending response queue, forking, message flushing, and crash recovery shared by page rendering and API handling.
 - `src/devAPIChild.ts` — dynamically imports the API file and invokes the named HTTP method export with `method`, `url`, `headers`, `body`, and `params`. The handler must return `{ status, body }`.
 
 ## Commands
 
 ```sh
-yarn install --frozen-lockfile
-yarn workspace @nestlyjs/server build
-PORT=4000 yarn workspace test-app dev
-PORT=4000 yarn workspace test-app start
-yarn workspace test-app test:routes
-yarn build
-yarn test
+pnpm install --frozen-lockfile
+pnpm --filter @nestlyjs/server build
+PORT=4000 pnpm --filter test-app dev
+PORT=4000 pnpm --filter test-app start
+pnpm --filter test-app test:routes
+pnpm build
+pnpm test
 node scripts/check-pack.mjs
 node scripts/check-install.mjs
-yarn changeset
+pnpm exec changeset
 ```
 
 ## Conventions
@@ -77,7 +81,7 @@ yarn changeset
 - TypeScript with `strict: true`.
 - CommonJS modules. Dev child processes rely on `ts-node/register`.
 - React 19.
-- Yarn 1.22.22, pinned through `.yarnrc`.
+- pnpm 12.21.0, pinned through `packageManager` in `package.json`; workspace packages are declared in `pnpm-workspace.yaml`.
 - Node 26 in `.nvmrc`; root `engines` allows `>=20`.
 - Route app root is `process.cwd()`.
 - Pages and layouts use a default export.
@@ -85,7 +89,7 @@ yarn changeset
 - Changes to `@nestlyjs/server` need a `.changeset` entry.
 - Merging to `main` runs Changesets; the version PR publishes with `NPM_TOKEN`.
 - Renovate automerge is enabled.
-- Vitest with v8 coverage. Run `yarn test` from the repo root.
+- Vitest with v8 coverage. Run `pnpm test` from the repo root.
 - The server package ships only `dist/` and `tsconfig.devServer.json`. Verify with `node scripts/check-pack.mjs` after building.
 
 ## Known gaps and warnings

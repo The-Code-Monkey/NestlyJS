@@ -22,6 +22,7 @@ See [docs/ROADMAP.md](./docs/ROADMAP.md) for the current scope and deferred feat
 ## Requirements
 
 - Node.js 20 or newer
+- pnpm 12 or newer
 - React 19 and React DOM 19 as peer dependencies
 
 ## Install
@@ -29,8 +30,8 @@ See [docs/ROADMAP.md](./docs/ROADMAP.md) for the current scope and deferred feat
 From this workspace:
 
 ```sh
-yarn install
-yarn workspace @nestlyjs/server build
+pnpm install
+pnpm --filter @nestlyjs/server build
 ```
 
 Published package, once released:
@@ -141,17 +142,17 @@ Requests that look like static assets never fall back to routes. Missing assets 
 ## Development commands
 
 ```sh
-yarn test
+pnpm test
 node scripts/check-pack.mjs
-yarn changeset
+pnpm exec changeset
 ```
 
 From the repo root, run the server and test app explicitly:
 
 ```sh
-yarn workspace @nestlyjs/server build
-PORT=4000 yarn workspace test-app dev
-yarn workspace test-app test:routes
+pnpm --filter @nestlyjs/server build
+PORT=4000 pnpm --filter test-app dev
+pnpm --filter test-app test:routes
 ```
 
 ## Releases
@@ -159,7 +160,7 @@ yarn workspace test-app test:routes
 Releases use Changesets. Merging to `main` opens a version PR; merging that PR publishes `@nestlyjs/server` when `NPM_TOKEN` is configured in GitHub Actions.
 
 ```sh
-yarn changeset
+pnpm exec changeset
 node scripts/check-pack.mjs
 node scripts/check-install.mjs
 ```
