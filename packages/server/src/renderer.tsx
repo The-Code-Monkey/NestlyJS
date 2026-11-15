@@ -8,10 +8,6 @@ export interface ClientInstance {
   props: any;
 }
 
-export function serializeProps(props: any) {
-  return JSON.stringify(props || {}).replace(/</g, "\\u003c");
-}
-
 export function attachFilePaths(mod: any, filePath: string) {
   if (!mod) return mod;
   const maybeTag = (comp: any) => {
@@ -105,44 +101,4 @@ export async function renderPageTree(
     html: renderToStaticMarkup(wrapped),
     instances,
   };
-}
-
-export function hydrationScript(instances: ClientInstance[]) {
-  return `
-      <script>
-      (function() {
-        const instances = ${serializeProps(
-          instances.map(({ id, instanceKey, props }) => ({
-            id,
-            key: instanceKey,
-            props,
-          }))
-        )};
-        document.addEventListener("DOMContentLoaded", () => {
-          for (const { id, key, props } of instances) {
-            const el = document.getElementById("hydrate-" + key);
-            const Comp = window.__components[id]?.default;
-            if (el && Comp) {
-              window.ReactDOMClient.hydrateRoot(el, window.React.createElement(Comp, props));
-            } else {
-              console.warn("Hydration skipped: element or component not found for", id);
-            }
-          }
-        });
-      })();
-      </script>`;
-}
-
-export function injectHead(html: string, markup: string) {
-  if (!markup) return html;
-  return html.includes("</head>")
-    ? html.replace("</head>", `${markup}</head>`)
-    : markup + html;
-}
-
-export function injectBody(html: string, markup: string) {
-  if (!markup) return html;
-  return html.includes("</body>")
-    ? html.replace("</body>", `${markup}</body>`)
-    : html + markup;
 }

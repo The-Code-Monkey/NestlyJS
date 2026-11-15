@@ -39,11 +39,13 @@ const required = [
   "dist/hmr.js",
   "dist/htmlCache.js",
   "dist/manifest.js",
+  "dist/pageDocument.js",
   "dist/prodRouter.js",
   "dist/routePatterns.js",
   "dist/routeResolver.js",
   "dist/shim.js",
   "dist/staticAssets.js",
+  "dist/supervisedChild.js",
 ];
 
 const forbiddenPrefixes = ["src/", "test/", "routes/"];

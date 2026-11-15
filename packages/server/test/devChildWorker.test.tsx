@@ -4,11 +4,8 @@ import os from "os";
 import path from "path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  attachFilePaths,
-  renderAndWrap,
-  serializeProps,
-} from "../src/renderer";
+import { attachFilePaths, renderAndWrap } from "../src/renderer";
+import { serializeProps } from "../src/pageDocument";
 
 let root: string;
 const originalCwd = process.cwd();

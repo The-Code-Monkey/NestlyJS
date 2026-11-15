@@ -103,6 +103,21 @@ describe("devSSRHandler", () => {
     expect(child.send).toHaveBeenCalledTimes(2);
   });
 
+  it("ignores unrelated child messages", async () => {
+    const url = nextUrl();
+    const res = response();
+    await devSSRHandler(
+      { url, method: "GET" } as any,
+      res as any,
+      request(url)
+    );
+
+    m.children[0].handlers.message({ type: "ready" });
+
+    expect(res.writeHead).not.toHaveBeenCalled();
+    expect(res.end).not.toHaveBeenCalled();
+  });
+
   it("returns 500 when the child exits with pending requests", async () => {
     const url = nextUrl();
     const res = response();
