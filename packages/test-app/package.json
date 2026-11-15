@@ -10,8 +10,15 @@
     "build": "echo 'Building...'"
   },
   "dependencies": {
-    "@nestlyjs/server": "*",
+    "@nestlyjs/server": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
   }
 }

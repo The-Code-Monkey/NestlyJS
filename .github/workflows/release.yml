@@ -19,18 +19,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12.21.0
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 26
-          cache: "yarn"
+          cache: "pnpm"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build Server
-        run: yarn workspace @nestlyjs/server build
+        run: pnpm --filter @nestlyjs/server build
 
       - name: Check package contents
         run: node scripts/check-pack.mjs
@@ -38,8 +43,8 @@ jobs:
       - name: Create release pull request or publish
         uses: changesets/action@v2.1.2
         with:
-          publish: yarn changeset publish
-          version: yarn changeset version
+          publish: pnpm exec changeset publish
+          version: pnpm exec changeset version
           commit: "chore: release packages"
           title: "chore: release packages"
         env:
