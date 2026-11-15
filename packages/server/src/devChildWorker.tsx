@@ -2,13 +2,8 @@
 import fs from "fs";
 import { bundleCssFiles, bundlePageClient } from "./bundler";
 import { hmrClientScript } from "./hmr";
-import {
-  attachFilePaths,
-  hydrationScript,
-  injectBody,
-  injectHead,
-  renderPageTree,
-} from "./renderer";
+import { attachFilePaths, renderPageTree } from "./renderer";
+import { renderPageDocument } from "./pageDocument";
 import {
   clientIdFor,
   getImports,
@@ -63,7 +58,6 @@ export async function renderPage(
       layoutModules,
       params
     );
-    let finalHTML = html;
 
     if (cachedBundle === null) {
       cachedBundle = await bundlePageClient(
@@ -79,17 +73,18 @@ export async function renderPage(
       cachedStyle = await bundleCssFiles(graph.cssFiles);
     }
 
-    finalHTML = injectHead(
-      finalHTML,
-      cachedStyle ? `<style data-nestly-style>${cachedStyle}</style>` : ""
+    const finalHTML = renderPageDocument(
+      { html, instances },
+      {
+        head: cachedStyle
+          ? `<style data-nestly-style>${cachedStyle}</style>`
+          : "",
+        body: bundle.js
+          ? `<script type="module">${bundle.runtime}${bundle.js}</script>`
+          : "",
+        trailingBody: hmrClientScript,
+      }
     );
-
-    const scripts =
-      (bundle.js
-        ? `<script type="module">${bundle.runtime}${bundle.js}</script>` +
-          hydrationScript(instances)
-        : "") + hmrClientScript;
-    finalHTML = injectBody(finalHTML, scripts);
 
     cachedHtml = finalHTML;
     console.log(`[CHILD ${process.pid}] Rendered page for ${url}`);

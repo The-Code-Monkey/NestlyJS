@@ -81,7 +81,7 @@ The parsed payload passed to an API handler as `body`. JSON content types parse 
 _Avoid_: Payload, input
 
 **HTML Cache**:
-An in-memory production cache of rendered page HTML keyed by URL path.
+An in-memory production cache of assembled Page Documents keyed by URL path.
 _Avoid_: Page cache, SSR cache
 
 **Graceful Shutdown**:
@@ -115,6 +115,18 @@ _Avoid_: Chunk, vendor bundle, client bundle
 **Page Graph**:
 The discovered assets of a Page: its Layout chain, Client Component files, and CSS files, derived from the Page file alone.
 _Avoid_: Asset map, page manifest, dependency graph
+
+**Page Document**:
+The full HTML document assembled from a rendered Page and an asset plan: head markup, Page script, Hydration markup, and trailing markup in a fixed order.
+_Avoid_: HTML template, page shell, document wrapper
+
+**Asset Plan**:
+The runtime-specific head and body markup supplied to Page Document assembly. Development and production differ only in this plan and in their cache.
+_Avoid_: Asset manifest, injection list, bundle config
+
+**Supervised Child**:
+A development child process owned by one key, with its pending responses, reuse, crash failure, and recreation handled by one supervisor.
+_Avoid_: Child pool, process manager, worker wrapper
 
 **Page CSS**:
 CSS owned by the server-rendered Page and its Layouts, excluding CSS reachable only through Client Components.

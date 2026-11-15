@@ -5,12 +5,8 @@ import fs from "fs";
 import path from "path";
 import { matchManifestRoute } from "./prodRouter";
 import { serveClientAsset, serveStaticAsset } from "./staticAssets";
-import {
-  hydrationScript,
-  injectBody,
-  injectHead,
-  renderPageTree,
-} from "./renderer";
+import { renderPageTree } from "./renderer";
+import { renderPageDocument } from "./pageDocument";
 import type { Manifest } from "./manifest";
 import { HtmlCache } from "./htmlCache";
 import { RequestBodyError, readRequestBody } from "./requestBody";
@@ -82,19 +78,17 @@ export async function handleRequest(
           decision.params
         );
 
-        let document = html;
-        if (route.page!.style) {
-          document = injectHead(
-            document,
-            `<link rel="stylesheet" href="${route.page!.style}">`
-          );
-        }
-
-        if (route.page!.script) {
-          let scripts = `<script type="module" src="${route.page!.script}"></script>`;
-          if (instances.length > 0) scripts += hydrationScript(instances);
-          document = injectBody(document, scripts);
-        }
+        const document = renderPageDocument(
+          { html, instances },
+          {
+            head: route.page!.style
+              ? `<link rel="stylesheet" href="${route.page!.style}">`
+              : "",
+            body: route.page!.script
+              ? `<script type="module" src="${route.page!.script}"></script>`
+              : "",
+          }
+        );
 
         htmlCache.set(cacheKey, document);
         res.writeHead(200, {
