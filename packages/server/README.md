@@ -10,6 +10,8 @@ The NestlyJS CLI and runtime. File-based full-stack rendering for React.
 npm install @nestlyjs/server react react-dom
 ```
 
+Requires Node.js 22.22 or newer.
+
 ## Routes
 
 ```text
