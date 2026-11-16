@@ -105,7 +105,7 @@ pnpm exec changeset
 - Worker failures are surfaced as generic 500 responses. Custom 404/500 pages are not implemented and 404 bodies are plain text.
 - The package has no `main`, `types`, or `exports` field. It is CLI-only and reserves no public library API.
 - Only `page.tsx`, `layout.tsx`, and `api.ts` are recognized. `.jsx` and `.ts` pages are ignored.
-- The repository is private without rulesets, so GitHub branch protection is unavailable. A direct push of an edited `.github/workflows/publish.yml` to `main` can publish; review and npm-side configuration are the only controls.
+- The repository is private without rulesets, so GitHub branch protection and environment required reviewers are unavailable. `publish.yml` refuses direct-push commits that are not associated with a merged pull request, but a direct push that also edits `publish.yml` can publish.
 
 ## Rules for agents
 

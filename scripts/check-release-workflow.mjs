@@ -56,6 +56,15 @@ check(
   "the publish job must run in the npm-publish environment"
 );
 
+check(
+  publish.includes("Verify the release came through a merged pull request"),
+  "publish.yml must verify that the release commit came through a merged pull request"
+);
+check(
+  publish.includes("commits/$sha/pulls") && publish.includes("merged_at != null"),
+  "the merged-pull-request check must query the commit's pull request association"
+);
+
 // Permissions and credentials.
 check(publish.includes("id-token: write"), "publish.yml must request id-token: write");
 check(
