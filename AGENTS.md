@@ -91,7 +91,7 @@ pnpm exec changeset
 - Pages and layouts use a default export.
 - API routes use named exports matching HTTP methods, such as `GET`, `POST`, `PUT`.
 - Changes to `@nestlyjs/server` need a `.changeset` entry.
-- Publishing uses npm trusted publishing over OIDC; no npm token exists. Publishing is confined to `publish.yml`, on `main`, in this repository. Read `docs/RELEASING.md` before touching a release workflow.
+- Publishing uses npm trusted publishing over OIDC; no npm token exists. Publishing is confined to `publish.yml`, on `main`, in this repository, and npm's trusted publisher must keep the `npm-publish` environment claim. Read `docs/RELEASING.md` before touching a release workflow.
 - Merging to `main` runs the Release workflow, which opens the version PR; merging that PR publishes over OIDC.
 - Renovate automerge is enabled.
 - Vitest with v8 coverage. Run `pnpm test` from the repo root.
@@ -105,7 +105,7 @@ pnpm exec changeset
 - Worker failures are surfaced as generic 500 responses. Custom 404/500 pages are not implemented and 404 bodies are plain text.
 - The package has no `main`, `types`, or `exports` field. It is CLI-only and reserves no public library API.
 - Only `page.tsx`, `layout.tsx`, and `api.ts` are recognized. `.jsx` and `.ts` pages are ignored.
-- The repository is private without rulesets, so GitHub branch protection is unavailable and `main` is not protected. Changes to `.github/workflows/publish.yml` rely on review.
+- The repository is private without rulesets, so GitHub branch protection is unavailable. A direct push of an edited `.github/workflows/publish.yml` to `main` can publish; review and npm-side configuration are the only controls.
 
 ## Rules for agents
 
