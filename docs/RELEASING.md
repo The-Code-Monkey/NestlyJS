@@ -80,7 +80,7 @@ Package settings on npmjs.com for `@nestlyjs/server`:
    pnpm exec changeset
    ```
 
-2. Merge the pull request. `release.yml` runs tests, builds, checks the package contents, and opens or updates `chore: release packages` with the new version and changelog.
+2. Merge the pull request. `release.yml` runs tests, builds, checks the package contents, and opens or updates `chore: release packages` with the new version and changelog. When no changeset is pending — the normal case for a docs or CI push — it stops after the checks.
 3. Approve the version PR's `Test Test-App` run if GitHub marked it `action_required` (see below), then merge it.
 4. `publish.yml` publishes over OIDC, writes the git tag `@nestlyjs/server@X.Y.Z`, and creates the GitHub release.
 5. Verify the artifact that was actually published, in an empty directory:

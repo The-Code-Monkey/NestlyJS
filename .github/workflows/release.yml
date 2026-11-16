@@ -45,9 +45,19 @@ jobs:
       - name: Check package contents
         run: node scripts/check-pack.mjs
 
+      # `changeset version` exits non-zero when nothing is pending, and on most
+      # pushes that is the normal state, so only run it when there is work.
+      - name: Check for pending changesets
+        id: changesets
+        run: |
+          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+          echo "Pending changesets: $pending"
+
       # Version only. Publishing lives in publish.yml so that OIDC permission
       # is never granted to the job that can write pull requests.
       - name: Create or update the version pull request
+        if: steps.changesets.outputs.pending != '0'
         uses: changesets/action/version@v2.1.2
         with:
           script: pnpm exec changeset version

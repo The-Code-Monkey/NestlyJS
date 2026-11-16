@@ -76,6 +76,13 @@ check(
   "publish.yml must not reference an npm token"
 );
 
+// The version workflow must not run its script when nothing is pending:
+// `changeset version` exits non-zero in that case.
+check(
+  /if:\s*steps\.changesets\.outputs\.pending\s*!=\s*'0'/.test(version),
+  "release.yml must skip the version action when no changesets are pending"
+);
+
 // The version workflow must never publish.
 check(
   !/changesets\/action\/publish|publish-script|changeset publish/.test(version),
