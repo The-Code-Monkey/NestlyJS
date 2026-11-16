@@ -112,6 +112,17 @@ export function start({
       if (shuttingDown) return;
       shuttingDown = true;
       cluster.removeAllListeners("exit");
+
+      // Start worker cleanup before disconnect so that open HMR streams are
+      // closed instead of holding the worker server open.
+      for (const worker of Object.values(cluster.workers ?? {})) {
+        try {
+          worker?.send?.({ type: "shutdown" });
+        } catch {
+          // The worker may have lost its IPC channel already.
+        }
+      }
+
       cluster.disconnect(() => process.exit(0));
       setTimeout(() => process.exit(1), 5000).unref();
     };
@@ -158,5 +169,8 @@ export function start({
     process.once("SIGTERM", shutdown);
     process.once("SIGINT", shutdown);
     process.once("disconnect", shutdown);
+    process.once("message", (message: unknown) => {
+      if ((message as { type?: string })?.type === "shutdown") shutdown();
+    });
   }
 }

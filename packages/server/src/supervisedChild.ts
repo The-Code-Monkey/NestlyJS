@@ -26,6 +26,10 @@ export interface SupervisorProtocol<Response, Reply> {
   fail(response: Response, reason: string): void;
   /** Body text used by `fail` when a child exits. */
   failure: string;
+  /** Optional request id carried by a message, used to correlate replies. */
+  requestId?(message: unknown): string | number | undefined;
+  /** Optional request id carried by a reply. */
+  replyId?(reply: Reply): string | number | undefined;
   /** Optional hook for logging or invalidation when a child exits. */
   onExit?(
     key: string,
@@ -46,9 +50,14 @@ export interface Supervisor<Response> {
   killAll(): void;
 }
 
+interface PendingResponse<Response> {
+  id: string | number | undefined;
+  response: Response;
+}
+
 interface ChildEntry<Response> {
   child: ChildLike;
-  pending: Response[];
+  pending: PendingResponse<Response>[];
 }
 
 export function createSupervisor<Response, Reply>(
@@ -68,9 +77,23 @@ export function createSupervisor<Response, Reply>(
       const reply = protocol.interpret(key, message);
       if (reply === null) return;
 
+      const replyId = protocol.replyId?.(reply);
+      if (replyId !== undefined) {
+        const index = entry.pending.findIndex(
+          (pending) => pending.id === replyId
+        );
+        if (index === -1) return;
+
+        const [pending] = entry.pending.splice(index, 1);
+        protocol.complete(pending.response, reply);
+        return;
+      }
+
       const pending = entry.pending;
       entry.pending = [];
-      for (const response of pending) protocol.complete(response, reply);
+      for (const pendingResponse of pending) {
+        protocol.complete(pendingResponse.response, reply);
+      }
     });
 
     child.on("exit", (code, signal) => {
@@ -78,7 +101,9 @@ export function createSupervisor<Response, Reply>(
 
       const pending = entry.pending;
       entry.pending = [];
-      for (const response of pending) protocol.fail(response, protocol.failure);
+      for (const pendingResponse of pending) {
+        protocol.fail(pendingResponse.response, protocol.failure);
+      }
 
       if (children.get(key) === entry) children.delete(key);
     });
@@ -97,7 +122,10 @@ export function createSupervisor<Response, Reply>(
   return {
     request(key, message, response) {
       const entry = ensure(key);
-      entry.pending.push(response);
+      entry.pending.push({
+        id: protocol.requestId?.(message),
+        response,
+      });
       entry.child.send(message);
     },
     kill,

@@ -72,6 +72,38 @@ function harness(withExitHook = true) {
   };
 }
 
+function idHarness() {
+  const children: FakeChild[] = [];
+
+  const protocol: SupervisorProtocol<
+    Response,
+    { id: string; value: string }
+  > = {
+    fork: () => {
+      const child = fakeChild();
+      children.push(child);
+      return child;
+    },
+    interpret: (_key, message: any) =>
+      message?.type === "done"
+        ? { id: message.id, value: message.value }
+        : null,
+    complete: (response, reply) => response.complete(reply),
+    fail: (response, reason) => response.fail(reason),
+    failure: "child crashed",
+    requestId: (message: any) => message?.id,
+    replyId: (reply) => reply.id,
+  };
+
+  return {
+    supervisor: createSupervisor(protocol),
+    children,
+    response(): Response {
+      return { complete: vi.fn(), fail: vi.fn() };
+    },
+  };
+}
+
 describe("createSupervisor", () => {
   it("forks one child per key and reuses it", () => {
     const h = harness();
@@ -106,6 +138,43 @@ describe("createSupervisor", () => {
     for (const response of responses) {
       expect(response.complete).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it("correlates replies with request ids", () => {
+    const h = idHarness();
+    const first = h.response();
+    const second = h.response();
+
+    h.supervisor.request("api:/", { id: "a" }, first);
+    h.supervisor.request("api:/", { id: "b" }, second);
+
+    h.children[0].emitMessage({ type: "done", id: "b", value: "second" });
+
+    expect(second.complete).toHaveBeenCalledWith({
+      id: "b",
+      value: "second",
+    });
+    expect(first.complete).not.toHaveBeenCalled();
+
+    h.children[0].emitMessage({ type: "done", id: "a", value: "first" });
+
+    expect(first.complete).toHaveBeenCalledWith({
+      id: "a",
+      value: "first",
+    });
+  });
+
+  it("ignores a reply with an unknown request id", () => {
+    const h = idHarness();
+    const response = h.response();
+
+    h.supervisor.request("api:/", { id: "a" }, response);
+    h.children[0].emitMessage({ type: "done", id: "missing", value: "no" });
+
+    expect(response.complete).not.toHaveBeenCalled();
+
+    h.children[0].emitMessage({ type: "done", id: "a", value: "yes" });
+    expect(response.complete).toHaveBeenCalledWith({ id: "a", value: "yes" });
   });
 
   it("ignores unrelated messages", () => {

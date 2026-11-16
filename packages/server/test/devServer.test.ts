@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
-  state: { isPrimary: true },
+  state: { isPrimary: true, workers: {} as Record<string, any> },
+  send: vi.fn(),
   fork: vi.fn(),
   on: vi.fn(),
   removeAllListeners: vi.fn(),
@@ -28,6 +29,9 @@ vi.mock("cluster", () => ({
     },
     fork: m.fork,
     on: m.on,
+    get workers() {
+      return m.state.workers;
+    },
     removeAllListeners: m.removeAllListeners,
     disconnect: m.disconnect,
   },
@@ -80,6 +84,7 @@ describe("devServer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     m.state.isPrimary = true;
+    m.state.workers = {};
     m.resolve.mockReturnValue(null);
     m.exists.mockReturnValue(true);
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -234,8 +239,42 @@ describe("devServer", () => {
     expect(res.end).toHaveBeenCalledWith("API route not found");
   });
 
-  it("shuts down the primary process", () => {
+  it("starts worker cleanup before disconnecting and exits 0", () => {
     vi.useFakeTimers();
+    let disconnected: (() => void) | undefined;
+    m.state.workers = { 1: { send: m.send } };
+    m.disconnect.mockImplementationOnce((cb?: () => void) => {
+      disconnected = cb;
+    });
+
+    start({ port: 3000, totalWorkers: 1 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
+    shutdown();
+
+    expect(m.removeAllListeners).toHaveBeenCalledWith("exit");
+    expect(m.send).toHaveBeenCalledTimes(1);
+    expect(m.send).toHaveBeenCalledWith({ type: "shutdown" });
+    expect(m.disconnect).toHaveBeenCalledTimes(1);
+    expect(m.send.mock.invocationCallOrder[0]).toBeLessThan(
+      m.disconnect.mock.invocationCallOrder[0]
+    );
+    expect(process.exit).not.toHaveBeenCalled();
+
+    disconnected?.();
+    expect(process.exit).toHaveBeenCalledWith(0);
+
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("exits 1 when the primary disconnect does not finish", () => {
+    vi.useFakeTimers();
+    m.disconnect.mockImplementationOnce(() => {});
+
     start({ port: 3000, totalWorkers: 1 });
     const shutdown = (process.once as any).mock.calls.find(
       (call: any[]) => call[0] === "SIGTERM"
@@ -245,15 +284,36 @@ describe("devServer", () => {
     shutdown();
     vi.advanceTimersByTime(5000);
 
-    expect(m.removeAllListeners).toHaveBeenCalledWith("exit");
-    expect(m.disconnect).toHaveBeenCalled();
-    expect(process.exit).toHaveBeenCalledWith(0);
-    expect(process.exit).toHaveBeenLastCalledWith(1);
+    expect(process.exit).toHaveBeenCalledTimes(1);
+    expect(process.exit).toHaveBeenCalledWith(1);
+
     vi.useRealTimers();
   });
 
-  it("shuts down a worker server", () => {
+  it("starts worker cleanup from a shutdown message", () => {
     vi.useFakeTimers();
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+    const onMessage = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "message"
+    )[1];
+
+    onMessage({ type: "shutdown" });
+
+    expect(m.closeHmr).toHaveBeenCalledTimes(1);
+    expect(m.close).toHaveBeenCalledTimes(1);
+    expect(process.exit).toHaveBeenCalledWith(0);
+
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("closes the worker server and exits 0", () => {
+    vi.useFakeTimers();
+    let closed: (() => void) | undefined;
+    m.close.mockImplementationOnce((cb?: () => void) => {
+      closed = cb;
+    });
     m.state.isPrimary = false;
     start({ port: 3000 });
     const shutdown = (process.once as any).mock.calls.find(
@@ -262,12 +322,33 @@ describe("devServer", () => {
 
     shutdown();
     shutdown();
+
+    expect(m.closeHmr).toHaveBeenCalledTimes(1);
+    expect(m.close).toHaveBeenCalledTimes(1);
+    expect(process.exit).not.toHaveBeenCalled();
+
+    closed?.();
+    expect(process.exit).toHaveBeenCalledWith(0);
+
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("exits 1 when the worker close does not finish", () => {
+    vi.useFakeTimers();
+    m.close.mockImplementationOnce(() => {});
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
     vi.advanceTimersByTime(5000);
 
-    expect(m.closeHmr).toHaveBeenCalled();
-    expect(m.close).toHaveBeenCalled();
-    expect(process.exit).toHaveBeenCalledWith(0);
-    expect(process.exit).toHaveBeenLastCalledWith(1);
+    expect(process.exit).toHaveBeenCalledTimes(1);
+    expect(process.exit).toHaveBeenCalledWith(1);
+
     vi.useRealTimers();
   });
 

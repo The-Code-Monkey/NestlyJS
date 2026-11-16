@@ -365,6 +365,28 @@ export default function Layout({ children }: any) { return <html><body>{children
     expect(getPageGraph(page).layouts).toEqual([layout]);
   });
 
+  it("discovers client components through aliases and import comments", () => {
+    const button = write(
+      "routes/button.tsx",
+      `"use client";
+export function $Button() { return null; }
+export default $Button;`
+    );
+    const other = write(
+      "routes/other.tsx",
+      `"use client";
+export default function Other() { return null; }`
+    );
+    const page = write(
+      "routes/page.tsx",
+      `import { $Button as Button } from "./button";
+import /* comment */ Other from "./other";
+export default function Page() { return [Button, Other]; }`
+    );
+
+    expect(getPageGraph(page).clientFiles).toEqual([button, other]);
+  });
+
   it("sorts the client file set deterministically", () => {
     const zebra = write(
       "routes/zebra.tsx",
@@ -409,6 +431,18 @@ import React from "react";`
     );
 
     expect(getImports(entry)).toEqual([css]);
+  });
+
+  it("keeps aliases with $ and comments in import clauses", () => {
+    const button = write("button.tsx", "export const $Button = 1;");
+    const other = write("other.ts", "export const Other = 1;");
+    const entry = write(
+      "entry.tsx",
+      `import { $Button as Button } from "./button";
+import /* comment */ x from "./other";`
+    );
+
+    expect(getImports(entry)).toEqual([button, other]);
   });
 
   it("resolves relative imports and ignores bare or missing ones", () => {

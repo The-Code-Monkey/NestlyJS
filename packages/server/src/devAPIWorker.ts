@@ -19,6 +19,7 @@ interface ApiReply {
   status: number;
   body: any;
   json: boolean;
+  requestId?: string;
 }
 
 const DEV_TSCONFIG = path.resolve(__dirname, "..", "tsconfig.devServer.json");
@@ -46,22 +47,39 @@ function methodFromKey(key: string) {
   return key.slice(0, key.indexOf(":"));
 }
 
+let requestSequence = 0;
+function nextRequestId() {
+  return `${process.pid}:${++requestSequence}`;
+}
+
 const supervisor = createSupervisor<http.ServerResponse, ApiReply>({
   fork: forkApiChild,
   failure: "API Worker crashed",
   interpret(key, message: any) {
     if (message?.type === "apiNotFound") {
       const notFound = notFoundResponse(methodFromKey(key));
-      return { status: notFound.status, body: notFound.body, json: false };
+      return {
+        status: notFound.status,
+        body: notFound.body,
+        json: false,
+        requestId: message.requestId,
+      };
     }
     if (message?.type === "apiResponse") {
       return {
         status: message.status || 200,
         body: message.body,
         json: true,
+        requestId: message.requestId,
       };
     }
     return null;
+  },
+  requestId(message: any) {
+    return message?.requestId;
+  },
+  replyId(reply) {
+    return reply.requestId;
   },
   complete(res, reply) {
     if (reply.json) {
@@ -144,6 +162,7 @@ export async function devAPIHandler(
       body,
       bodyError,
       params: request.params,
+      requestId: nextRequestId(),
     },
     res
   );

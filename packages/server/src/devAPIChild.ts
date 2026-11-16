@@ -10,10 +10,20 @@ export interface ApiMessage {
   body?: any;
   bodyError?: { status: number; message: string };
   params?: RouteParams;
+  requestId?: string;
 }
 
 export async function handleApiMessage(
-  { file, method, url, headers, body, bodyError, params }: ApiMessage,
+  {
+    file,
+    method,
+    url,
+    headers,
+    body,
+    bodyError,
+    params,
+    requestId,
+  }: ApiMessage,
   send: (msg: any) => void = process.send?.bind(process) ?? (() => {})
 ) {
   const pid = process.pid;
@@ -22,7 +32,7 @@ export async function handleApiMessage(
     const apiModule = await import(file);
     const handler = apiModule?.[method];
     if (typeof handler !== "function") {
-      send({ type: "apiNotFound" });
+      send({ type: "apiNotFound", requestId });
       return;
     }
     if (bodyError) {
@@ -30,6 +40,7 @@ export async function handleApiMessage(
         type: "apiResponse",
         status: bodyError.status,
         body: { error: bodyError.message },
+        requestId,
       });
       return;
     }
@@ -41,6 +52,7 @@ export async function handleApiMessage(
       type: "apiResponse",
       status: result.status || 200,
       body: result.body,
+      requestId,
     });
     console.log(`[CHILD ${pid}] Responded for API: ${method} ${url}`);
   } catch (err) {
@@ -54,6 +66,7 @@ export async function handleApiMessage(
       body: {
         error: `[CHILD ${pid}] Error in API: ${method} ${url} ${err}`,
       },
+      requestId,
     });
   }
 }
