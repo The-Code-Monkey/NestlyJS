@@ -31,6 +31,8 @@ cd packages/server && npm publish --tag next   # 2FA prompt
 
 Publish the tarball before merging the version commit, so the post-merge `publish.yml` run finds the version on the registry and does nothing. Do not use `changeset publish` for this step: in prerelease mode it publishes a first release under `latest` rather than `next`.
 
+npm also gives the first published version of a package the `latest` tag even when `--tag next` is passed, because `latest` must exist for `npm install @nestlyjs/server` to resolve. The first prerelease is therefore briefly installable as `latest`; publish the stable release in the same session so that window stays short.
+
 To return to stable releases:
 
 ```sh
