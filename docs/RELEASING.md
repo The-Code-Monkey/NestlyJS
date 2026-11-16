@@ -36,7 +36,8 @@ GitHub runs the workflow file **from the ref being pushed**, so everything writt
 | Push a fork and run its copy | `github.repository` fails immediately, and the OIDC token would identify the fork, which npm rejects. |
 | Re-run a workflow against a commit that is not on `main` | The first step refuses unless the commit is an ancestor of `origin/main`. |
 | Add an npm token instead of OIDC | The package disallows token publishing and no token exists. |
-| **Edit `publish.yml` and push it directly to `main`** | **Nothing. This publishes.** |
+| Direct-push a commit to `main` | The commit is not associated with a merged pull request, and the workflow refuses to publish it. GitHub records that association server-side; a commit message cannot forge it. |
+| **Edit `publish.yml` and push it directly to `main`** | **This publishes.** The workflow that runs is the edited one, and it can drop every check above. Only a GitHub-side rule on `main` or an npm-side approval stops this; see below. |
 
 ### Why the environment is load-bearing
 
@@ -44,12 +45,17 @@ Everything in the first five rows depends on a claim that the attacker cannot wr
 
 - **Repository and workflow filename** are in the OIDC token and checked by npm. Editing the workflow cannot change either claim.
 - **`environment: npm-publish`** is in the OIDC token, and npm's trusted publisher is configured with that environment name. The environment's branch policy allows `main` only and administrators can no longer bypass it, so the claim cannot be minted for another ref.
+- **Pull-request association** is recorded by GitHub when a commit reaches `main` through a merged pull request. The workflow queries it for the release commit and for the last commit that changed `publish.yml`. The *data* is out of band; the *query* is not, which is the limitation above.
 
 That is the difference between `merge-base --is-ancestor` (a step the pusher can delete) and the environment binding (a value npm checks after the fact). Without the environment in npm's configuration, repository plus filename alone accept a push from any branch of this repository, which is exactly the "dodgy branch edits the workflow" case.
 
 ### What is still not protected
 
-- **Direct pushes to `main`.** A maintainer with write access can push an edited `publish.yml` straight to `main`; the normal path then runs as usual and publishes. Branch protection and rulesets return `Upgrade to GitHub Pro or make this repository public` on this plan, so there is no required review and no CODEOWNERS enforcement. Mitigations, in order of strength: make the repository public or upgrade the plan and require review plus status checks on `.github/workflows/**`; or switch the trusted publisher to `npm stage publish`, which makes every publish a staged version a maintainer must approve with 2FA. The latter is a real human gate but gives up hands-off releases.
+- **A direct push that also edits `publish.yml`.** A maintainer with write access can push an edited workflow straight to `main`; the edited file runs, removes its own checks, and publishes. No in-repo check can prevent this, because the attacker writes the code that performs the check. The possible fixes all sit outside the workflow:
+  - **Protect `main`.** Branch protection and rulesets return `Upgrade to GitHub Pro or make this repository public` on this plan. Making the repository public or upgrading the plan allows requiring pull requests, blocking direct and force pushes, and running status checks before merge. A solo maintainer can still merge their own pull request, so this removes silent pushes, not self-review.
+  - **Approve each publish on npm.** Switching the trusted publisher to `npm stage publish` stages every version until a maintainer approves it with 2FA via the CLI or npmjs.com. This is the only control that survives a fully compromised workflow, and it gives up hands-off releases.
+  - **Publish from a repository the attacker cannot write to.** Move `publish.yml` to a separate repository owned by the same org, register that repository and workflow as the trusted publisher, and have it check out this one at a merged commit. App-repository write access then no longer implies publish access.
+- **Required reviewers on the environment are unavailable here.** The API refuses them: `Please ensure the billing plan supports the required reviewers protection rule`.
 - **Anyone who can change repository settings** can remove the environment policy or bypass it, just as they could delete the workflow. Settings access is equivalent to publish access.
 - **Unpublishing.** A published version cannot be reused. Fix forward with a patch release.
 
@@ -66,6 +72,7 @@ Package settings on npmjs.com for `@nestlyjs/server`:
 
 - Actions must be allowed to create pull requests (`Settings → Actions → General → Allow GitHub Actions to create and approve pull requests`). Without it the version PR cannot be opened.
 - The `npm-publish` environment must keep its branch policy limited to `main`, with administrator bypass disabled.
+- Consider protecting `main` (public repository or a paid plan) so changes cannot bypass pull requests.
 - The publish workflow must stay named `publish.yml`. npm matches the filename exactly.
 
 ## A normal release
