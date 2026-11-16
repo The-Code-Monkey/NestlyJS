@@ -51,7 +51,7 @@ That is the difference between `merge-base --is-ancestor` (a step the pusher can
 
 ### What is still not protected
 
-- **Self-merged pull requests.** The ruleset requires a pull request but no approving review, because a solo maintainer cannot approve their own. An edited `publish.yml` cannot be pushed silently, but it can be merged by the person who wrote it. Closing that needs a reviewer who is not the merger: a second maintainer plus a required approval, or required reviewers on the `npm-publish` environment with "Prevent self-review" enabled. Required reviewers alone are not enough when the only reviewer is the person merging, and either option adds a human approval to every release.
+- **Self-merged pull requests.** The ruleset requires a pull request but no approving review, because a solo maintainer cannot approve their own. An edited `publish.yml` cannot be pushed silently, but it can be merged by the person who wrote it, and admins hold a pull-request-only bypass that can skip the checks. Closing that needs a reviewer who is not the merger: a second maintainer plus a required approval, or required reviewers on the `npm-publish` environment with "Prevent self-review" enabled. Required reviewers alone are not enough when the only reviewer is the person merging, and either option adds a human approval to every release.
 - **A compromised workflow with approved changes.** If someone can merge a malicious `publish.yml` through a pull request, no in-repo check survives. Only npm staged publishing (`npm stage publish` plus a 2FA approval per release) or a trusted publisher in a separate repository survives a fully compromised workflow.
 - **Anyone who can change repository settings** can remove the environment policy or bypass it, just as they could delete the workflow. Settings access is equivalent to publish access.
 - **Unpublishing.** A published version cannot be reused. Fix forward with a patch release.
@@ -69,7 +69,8 @@ Package settings on npmjs.com for `@nestlyjs/server`:
 
 - Actions must be allowed to create pull requests (`Settings → Actions → General → Allow GitHub Actions to create and approve pull requests`). Without it the version PR cannot be opened.
 - The `npm-publish` environment must keep its branch policy limited to `main`, with administrator bypass disabled.
-- `main` must stay protected by the `main` ruleset: pull requests required, no direct or force pushes, no deletion, the `test` check required, and no bypass actors so administrators are bound too.
+- Two rulesets apply to `main`. `main` requires a pull request, the `test` check, and no force pushes or deletion. `Prod` requires linear history and allows squash or rebase merges.
+- Repository admins may bypass `main` for **pull-request merges only**. That is the escape hatch for a solo maintainer; it cannot be used to push directly to `main`, which was verified after the bypass was added.
 - The publish workflow must stay named `publish.yml`. npm matches the filename exactly.
 
 ## A normal release

@@ -105,7 +105,7 @@ pnpm exec changeset
 - Worker failures are surfaced as generic 500 responses. Custom 404/500 pages are not implemented and 404 bodies are plain text.
 - The package has no `main`, `types`, or `exports` field. It is CLI-only and reserves no public library API.
 - Only `page.tsx`, `layout.tsx`, and `api.ts` are recognized. `.jsx` and `.ts` pages are ignored.
-- `main` is protected by a ruleset: pull requests required, no direct or force pushes, the `test` check required, no bypass actors. A maintainer can still self-merge a pull request, so a malicious workflow edit is visible rather than prevented.
+- `main` is protected by two rulesets: pull requests and the `test` check required, no force pushes or deletion, linear history. Repository admins can bypass for pull-request merges only, not for direct pushes. A maintainer can still self-merge a pull request, so a malicious workflow edit is visible rather than prevented.
 
 ## Rules for agents
 
