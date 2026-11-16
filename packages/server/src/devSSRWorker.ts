@@ -1,5 +1,6 @@
 // devSSRWorker.ts
 import http from "http";
+import fs from "fs";
 import { fork } from "child_process";
 import path from "path";
 import chokidar from "chokidar";
@@ -17,12 +18,26 @@ interface RenderReply {
   url: string;
 }
 
+const DEV_TSCONFIG = path.resolve(__dirname, "..", "tsconfig.devServer.json");
+const DEV_COMPILER_OPTIONS = JSON.parse(
+  fs.readFileSync(DEV_TSCONFIG, "utf8")
+).compilerOptions;
+
+/**
+ * ts-node resolves its default `node_modules` ignore against the tsconfig's
+ * directory. An installed package's tsconfig lives inside node_modules, so
+ * every app dependency resolves to a `../../` path that the default ignore no
+ * longer matches, and ts-node then tries to require ESM-only dependencies as
+ * CommonJS. Skipping the project keeps the same compiler options but makes the
+ * ignore base the app root, so only the app's own files are compiled.
+ */
 function forkPageChild(): ChildLike {
   return fork(path.resolve(__dirname, "devChildWorker.js"), {
     execArgv: ["-r", "ts-node/register"],
     env: {
       ...process.env,
-      TS_NODE_PROJECT: path.resolve(__dirname, "..", "tsconfig.devServer.json"),
+      TS_NODE_SKIP_PROJECT: "true",
+      TS_NODE_COMPILER_OPTIONS: JSON.stringify(DEV_COMPILER_OPTIONS),
     },
   }) as ChildLike;
 }

@@ -21,9 +21,24 @@ interface ApiReply {
   json: boolean;
 }
 
+const DEV_TSCONFIG = path.resolve(__dirname, "..", "tsconfig.devServer.json");
+const DEV_COMPILER_OPTIONS = JSON.parse(
+  fs.readFileSync(DEV_TSCONFIG, "utf8")
+).compilerOptions;
+
+/**
+ * See the note in devSSRWorker: skipping the tsconfig keeps its compiler
+ * options but makes ts-node's ignore base the app root, so dependencies under
+ * node_modules are left to Node's own loader.
+ */
 function forkApiChild(): ChildLike {
   return fork(path.resolve(__dirname, "devAPIChild.js"), {
     execArgv: ["-r", "ts-node/register"],
+    env: {
+      ...process.env,
+      TS_NODE_SKIP_PROJECT: "true",
+      TS_NODE_COMPILER_OPTIONS: JSON.stringify(DEV_COMPILER_OPTIONS),
+    },
   }) as ChildLike;
 }
 

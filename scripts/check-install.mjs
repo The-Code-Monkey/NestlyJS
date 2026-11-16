@@ -71,6 +71,8 @@ try {
       tarball,
       "react@19.3.1",
       "react-dom@19.3.1",
+      "@types/react@19.3.0",
+      "@types/react-dom@19.3.0",
     ],
     { cwd: appDir, stdio: "inherit" }
   );
@@ -85,8 +87,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   write(
     "routes/page.tsx",
     `import React from "react";
+import Counter from "./counter";
 export default function Page() {
-  return <main><h1>Installed App</h1></main>;
+  return <main><h1>Installed App</h1><Counter /></main>;
+}`
+  );
+  write(
+    "routes/counter.tsx",
+    `"use client";
+import React, { useState } from "react";
+export default function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>Client Counter {count}</button>;
 }`
   );
   write("public/hello.txt", "installed static\n");
@@ -115,6 +127,29 @@ export default function Page() {
     throw new Error("installed app did not serve public assets");
   }
 
+  stop(server);
+  server = null;
+
+  // Development path: routes compile through ts-node and the SSR child loads
+  // the client bundler, so a dev-only dependency problem fails here instead of
+  // in a user's app.
+  const devPort = port + 1;
+  server = spawn(nestly, ["dev", `--port=${devPort}`], {
+    cwd: appDir,
+    detached: true,
+    stdio: ["ignore", "ignore", "inherit"],
+  });
+
+  const devPage = await waitForServer(`http://127.0.0.1:${devPort}/`, 60);
+  const devHtml = await devPage.text();
+  if (!devHtml.includes("Installed App")) {
+    throw new Error("dev server did not render its page");
+  }
+  if (!devHtml.includes("Client Counter")) {
+    throw new Error("dev server did not render the client component");
+  }
+
+  console.log("installed dev smoke test ok");
   console.log("installed package smoke test ok");
 } finally {
   stop(server);

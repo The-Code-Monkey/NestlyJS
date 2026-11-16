@@ -31,7 +31,11 @@ const m = vi.hoisted(() => {
 
 vi.mock("child_process", () => ({ fork: m.fork }));
 vi.mock("fs", () => ({
-  default: { existsSync: m.exists, watch: m.watch },
+  default: {
+    existsSync: m.exists,
+    watch: m.watch,
+    readFileSync: () => JSON.stringify({ compilerOptions: { jsx: "react-jsx" } }),
+  },
 }));
 vi.mock("../src/requestBody", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/requestBody")>();
