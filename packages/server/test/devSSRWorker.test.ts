@@ -130,7 +130,7 @@ describe("devSSRHandler", () => {
     m.children[0].handlers.exit(1, null);
 
     expect(res.writeHead).toHaveBeenCalledWith(500);
-    expect(res.end).toHaveBeenCalledWith("SSR Worker crashed");
+    expect(res.end).toHaveBeenCalledWith("Internal server error");
   });
 
   it("kills all page children when a route file changes", async () => {

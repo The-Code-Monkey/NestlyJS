@@ -58,8 +58,10 @@ const supervisor = createSupervisor<http.ServerResponse, ApiReply>({
     res.end(reply.body);
   },
   fail(res, reason) {
+    // The client gets a generic message; the reason stays in the server log.
+    console.error(`[API WORKER ${process.pid}] Failing a response: ${reason}`);
     res.writeHead(500);
-    res.end(reason);
+    res.end("Internal server error");
   },
   onExit(key, code, signal) {
     console.warn(

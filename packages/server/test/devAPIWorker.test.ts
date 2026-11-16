@@ -238,6 +238,6 @@ describe("devAPIHandler", () => {
     m.children[0].handlers.exit(1, null);
 
     expect(res.writeHead).toHaveBeenCalledWith(500);
-    expect(res.end).toHaveBeenCalledWith("API Worker crashed");
+    expect(res.end).toHaveBeenCalledWith("Internal server error");
   });
 });
