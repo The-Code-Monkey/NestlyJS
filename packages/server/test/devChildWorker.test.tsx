@@ -246,6 +246,35 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     errorSpy.mockRestore();
   });
 
+  it("reports render failures as a 500 render message", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    write(
+      "routes/layout.tsx",
+      `import React from "react";
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return <html><body>{children}</body></html>;
+}`
+    );
+    const pageFile = write(
+      "routes/page.tsx",
+      `export default function Page() {
+  throw new Error("boom");
+}`
+    );
+    const mod = await load();
+    const send = vi.fn();
+
+    await mod.handleMessage({ file: pageFile, url: "/" }, send);
+
+    expect(send).toHaveBeenCalledWith({
+      type: "render",
+      html: "<h1>Error rendering page</h1>",
+      url: "/",
+      status: 500,
+    });
+    errorSpy.mockRestore();
+  });
+
   it("sends rendered HTML through handleMessage", async () => {
     const pageFile = writePageApp();
     const mod = await load();
@@ -257,6 +286,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       type: "render",
       html: expect.stringContaining("home"),
       url: "/",
+      status: 200,
     });
   });
 

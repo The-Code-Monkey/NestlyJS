@@ -27,6 +27,7 @@ vi.mock("../src/devRefresh", () => ({
 
 import {
   HMR_PATH,
+  closeHmrClients,
   collectCssForUrl,
   handleChange,
   hmrClientScript,
@@ -66,6 +67,7 @@ function connection(url = HMR_PATH) {
   const res: any = new EventEmitter();
   res.writeHead = vi.fn();
   res.write = vi.fn();
+  res.end = vi.fn();
   res.writableEnded = false;
   responses.push(res);
   return { req, res };
@@ -204,6 +206,14 @@ describe("handleChange", () => {
   });
 
   it("refreshes client component changes", async () => {
+    write(
+      "routes/page.tsx",
+      `import Button from "./button";\nexport default function Page() { return Button; }`
+    );
+    write(
+      "routes/button.tsx",
+      `"use client";\nexport default function Button() { return null; }`
+    );
     const { req, res } = connection();
     hmrHandler(req, res);
 
@@ -216,7 +226,77 @@ describe("handleChange", () => {
     });
   });
 
+  it("reloads for non-client route file changes", async () => {
+    write(
+      "routes/page.tsx",
+      `import Header from "./header";\nexport default function Page() { return Header; }`
+    );
+    write(
+      "routes/header.tsx",
+      `export default function Header() { return null; }`
+    );
+    const { req, res } = connection();
+    hmrHandler(req, res);
+
+    await handleChange(path.join(root, "routes", "header.tsx"));
+
+    expect(m.buildScript).not.toHaveBeenCalled();
+    expect(messages(res)[0].type).toBe("reload");
+  });
+
+  it("reloads when the changed file has no connected page", async () => {
+    const { req, res } = connection(
+      `${HMR_PATH}?path=${encodeURIComponent("/missing")}`
+    );
+    hmrHandler(req, res);
+
+    await handleChange(path.join(root, "routes", "button.tsx"));
+
+    expect(m.buildScript).not.toHaveBeenCalled();
+    expect(messages(res)[0].type).toBe("reload");
+  });
+
+  it("reloads when the connected route has no page file", async () => {
+    write(
+      "routes/api.ts",
+      `export async function POST() { return { status: 200, body: "ok" }; }`
+    );
+    const { req, res } = connection();
+    hmrHandler(req, res);
+
+    await handleChange(path.join(root, "routes", "button.tsx"));
+
+    expect(m.buildScript).not.toHaveBeenCalled();
+    expect(messages(res)[0].type).toBe("reload");
+  });
+
+  it("reloads a client component the page does not use", async () => {
+    write(
+      "routes/page.tsx",
+      `export default function Page() { return null; }`
+    );
+    write(
+      "routes/button.tsx",
+      `"use client";\nexport default function Button() { return null; }`
+    );
+    const { req, res } = connection();
+    hmrHandler(req, res);
+
+    await handleChange(path.join(root, "routes", "button.tsx"));
+
+    expect(m.buildScript).not.toHaveBeenCalled();
+    expect(messages(res)[0].type).toBe("reload");
+  });
+
   it("reloads when no client bundle exists", async () => {
+    write(
+      "routes/page.tsx",
+      `import Button from "./button";\nexport default function Page() { return Button; }`
+    );
+    write(
+      "routes/button.tsx",
+      `"use client";\nexport default function Button() { return null; }`
+    );
     m.buildScript.mockResolvedValue("");
     const { req, res } = connection();
     hmrHandler(req, res);
@@ -227,6 +307,14 @@ describe("handleChange", () => {
   });
 
   it("reloads when rebuilding the client bundle fails", async () => {
+    write(
+      "routes/page.tsx",
+      `import Button from "./button";\nexport default function Page() { return Button; }`
+    );
+    write(
+      "routes/button.tsx",
+      `"use client";\nexport default function Button() { return null; }`
+    );
     m.buildScript.mockRejectedValue(new Error("boom"));
     const { req, res } = connection();
     hmrHandler(req, res);
@@ -234,6 +322,18 @@ describe("handleChange", () => {
     await handleChange(path.join(root, "routes", "button.tsx"));
 
     expect(messages(res)[0].type).toBe("reload");
+  });
+
+  it("closes open streams during shutdown", () => {
+    vi.useFakeTimers();
+    const { req, res } = connection();
+    hmrHandler(req, res);
+
+    closeHmrClients();
+    vi.advanceTimersByTime(15000);
+
+    expect(res.end).toHaveBeenCalled();
+    expect(res.write).not.toHaveBeenCalledWith(": ping\n\n");
   });
 });
 

@@ -82,6 +82,28 @@ describe("devSSRHandler", () => {
     expect(res.end).toHaveBeenCalledWith("<h1>ok</h1>");
   });
 
+  it("uses the render status from the child", async () => {
+    const url = nextUrl();
+    const res = response();
+    await devSSRHandler(
+      { url, method: "GET" } as any,
+      res as any,
+      request(url)
+    );
+
+    m.children[0].handlers.message({
+      type: "render",
+      url,
+      html: "failed",
+      status: 500,
+    });
+
+    expect(res.writeHead).toHaveBeenCalledWith(500, {
+      "Content-Type": "text/html",
+    });
+    expect(res.end).toHaveBeenCalledWith("failed");
+  });
+
   it("reuses an existing child for the same URL", async () => {
     const url = nextUrl();
     await devSSRHandler(

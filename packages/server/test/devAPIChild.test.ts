@@ -98,6 +98,47 @@ describe("handleApiMessage", () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
+  it("prefers a missing method over a body parsing error", async () => {
+    const file = writeApi("missing-with-bad-body", `export const GET = 1;`);
+    const send = vi.fn();
+
+    await handleApiMessage(
+      {
+        file,
+        method: "POST",
+        url: "/",
+        bodyError: { status: 400, message: "Invalid JSON" },
+      },
+      send
+    );
+
+    expect(send).toHaveBeenCalledWith({ type: "apiNotFound" });
+  });
+
+  it("returns a body parsing error for an existing method", async () => {
+    const file = writeApi(
+      "bad-body",
+      `export async function POST() { return { status: 200, body: "ok" }; }`
+    );
+    const send = vi.fn();
+
+    await handleApiMessage(
+      {
+        file,
+        method: "POST",
+        url: "/",
+        bodyError: { status: 400, message: "Invalid JSON" },
+      },
+      send
+    );
+
+    expect(send).toHaveBeenCalledWith({
+      type: "apiResponse",
+      status: 400,
+      body: { error: "Invalid JSON" },
+    });
+  });
+
   it("reports not found when the export is not a function", async () => {
     const file = writeApi("not-function", `export const GET = 1;`);
     const send = vi.fn();

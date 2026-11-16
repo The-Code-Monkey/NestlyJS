@@ -55,6 +55,7 @@ vi.mock("../src/staticAssets", async (importOriginal) => ({
 
 import {
   createModuleLoader,
+  executeProdDecision,
   handleRequest,
   loadManifest,
   start,
@@ -134,7 +135,7 @@ describe("handleRequest", () => {
       vi.fn()
     );
 
-    expect(m.serveClient).toHaveBeenCalledWith(expect.anything(), res, "a.js");
+    expect(m.serveClient).toHaveBeenCalledWith(expect.anything(), res, ["a.js"]);
   });
 
   it("serves public static assets", async () => {
@@ -149,7 +150,7 @@ describe("handleRequest", () => {
       vi.fn()
     );
 
-    expect(m.serveStatic).toHaveBeenCalledWith(req, res, "/logo.png");
+    expect(m.serveStatic).toHaveBeenCalledWith(req, res, ["logo.png"]);
   });
 
   it("renders a page with client assets", async () => {
@@ -432,6 +433,51 @@ describe("handleRequest", () => {
     expect(res.writeHead).toHaveBeenCalledWith(500);
   });
 
+  it("executes a supplied page decision without matching a route", async () => {
+    const page = () => React.createElement("h1", null, "supplied");
+    const res = response();
+
+    await executeProdDecision(
+      { url: "/", method: "GET" } as any,
+      res as any,
+      {
+        kind: "page",
+        url: "/",
+        path: "/",
+        segments: [],
+        method: "GET",
+        route: { pattern: [], page: { entry: "page.js" } },
+        params: {},
+      },
+      root,
+      () => ({ page, layouts: [] })
+    );
+
+    expect(res.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
+    expect(res.end.mock.calls[0][0]).toContain("supplied");
+  });
+
+  it("executes a supplied static decision from decoded segments", () => {
+    const req = { url: "/logo.png", method: "GET" };
+    const res = response();
+
+    void executeProdDecision(
+      req as any,
+      res as any,
+      {
+        kind: "staticAsset",
+        url: "/logo.png",
+        path: "/logo.png",
+        segments: ["logo.png"],
+        method: "GET",
+      },
+      root,
+      vi.fn()
+    );
+
+    expect(m.serveStatic).toHaveBeenCalledWith(req, res, ["logo.png"]);
+  });
+
   it("returns 500 when rendering throws", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const res = response();
@@ -464,6 +510,30 @@ describe("start", () => {
       path.join(root, ".nestly", "manifest.json"),
       JSON.stringify({ routes: [] })
     );
+  });
+
+  it("exits the primary process when no build exists", () => {
+    fs.rmSync(path.join(root, ".nestly"), { recursive: true, force: true });
+
+    start({ port: 3000, totalWorkers: 2 });
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(m.fork).not.toHaveBeenCalled();
+  });
+
+  it("ignores EPIPE worker errors during shutdown", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const on = vi.fn();
+    m.fork.mockReturnValueOnce({ on } as any);
+
+    start({ port: 3000, totalWorkers: 1 });
+
+    const handler = on.mock.calls[0][1];
+    handler({ code: "EPIPE" });
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    handler({ code: "EACCES" });
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   it("forks workers from the primary process", () => {

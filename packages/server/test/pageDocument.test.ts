@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  clientInstanceKey,
+  hydrationRootId,
   renderPageDocument,
   serializeProps,
   type PageDocumentAssets,
@@ -33,6 +35,24 @@ const productionAssets: PageDocumentAssets = {
   head: '<link rel="stylesheet" href="/_nestly/client/page.css">',
   body: '<script type="module" src="/_nestly/client/page.js"></script>',
 };
+
+describe("hydration markup", () => {
+  it("owns the instance key and root id format", () => {
+    expect(clientInstanceKey("routes/client.tsx", 2)).toBe(
+      "routes-client.tsx-2"
+    );
+    expect(hydrationRootId("routes-client.tsx-2")).toBe(
+      "hydrate-routes-client.tsx-2"
+    );
+  });
+
+  it("serializes the root id into the hydration script", () => {
+    const document = renderPageDocument(rendered(pageShell, [instance]), {});
+
+    expect(document).toContain('rootId":"hydrate-routes-client.tsx-0"');
+    expect(document).toContain('getElementById(rootId)');
+  });
+});
 
 describe("renderPageDocument", () => {
   it("returns the rendered markup untouched when there are no assets", () => {

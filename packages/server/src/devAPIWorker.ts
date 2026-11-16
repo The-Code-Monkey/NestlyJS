@@ -112,15 +112,15 @@ export async function devAPIHandler(
   console.log(`[API WORKER ${process.pid}] Request: ${method} ${urlPath}`);
 
   let body: unknown;
+  let bodyError: { status: number; message: string } | undefined;
   try {
     body = await readRequestBody(req);
   } catch (err) {
     if (err instanceof RequestBodyError) {
-      res.writeHead(err.status, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
-      return;
+      bodyError = { status: err.status, message: err.message };
+    } else {
+      throw err;
     }
-    throw err;
   }
 
   const key = `${method}:${urlPath}`;
@@ -142,6 +142,7 @@ export async function devAPIHandler(
       url: urlPath,
       headers: req.headers,
       body,
+      bodyError,
       params: request.params,
     },
     res

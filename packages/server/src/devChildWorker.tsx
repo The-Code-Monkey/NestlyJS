@@ -35,13 +35,18 @@ let cachedBundle: Awaited<ReturnType<typeof bundlePageClient>> | null = null;
 let cachedStyle: string | null = null;
 let cachedGraph: PageGraph | null = null;
 
-export async function renderPage(
+interface PageRenderResult {
+  html: string;
+  status: number;
+}
+
+async function renderPageResult(
   file: string,
   url: string,
   params: RouteParams = {}
-): Promise<string> {
+): Promise<PageRenderResult> {
   try {
-    if (cachedHtml !== null) return cachedHtml;
+    if (cachedHtml !== null) return { html: cachedHtml, status: 200 };
 
     preloadModule(file);
 
@@ -88,11 +93,19 @@ export async function renderPage(
 
     cachedHtml = finalHTML;
     console.log(`[CHILD ${process.pid}] Rendered page for ${url}`);
-    return finalHTML;
+    return { html: finalHTML, status: 200 };
   } catch (err) {
     console.error(`[CHILD ${process.pid}] Error rendering page:`, err);
-    return "<h1>Error rendering page</h1>";
+    return { html: "<h1>Error rendering page</h1>", status: 500 };
   }
+}
+
+export async function renderPage(
+  file: string,
+  url: string,
+  params: RouteParams = {}
+): Promise<string> {
+  return (await renderPageResult(file, url, params)).html;
 }
 
 export async function handleMessage(
@@ -103,7 +116,8 @@ export async function handleMessage(
   }: { file: string; url: string; params?: RouteParams },
   send: (msg: any) => void = process.send?.bind(process) ?? (() => {})
 ) {
-  send({ type: "render", html: await renderPage(file, url, params), url });
+  const result = await renderPageResult(file, url, params);
+  send({ type: "render", html: result.html, url, status: result.status });
 }
 
 /* v8 ignore start */

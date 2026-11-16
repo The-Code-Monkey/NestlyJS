@@ -8,11 +8,12 @@ export interface ApiMessage {
   url: string;
   headers?: any;
   body?: any;
+  bodyError?: { status: number; message: string };
   params?: RouteParams;
 }
 
 export async function handleApiMessage(
-  { file, method, url, headers, body, params }: ApiMessage,
+  { file, method, url, headers, body, bodyError, params }: ApiMessage,
   send: (msg: any) => void = process.send?.bind(process) ?? (() => {})
 ) {
   const pid = process.pid;
@@ -22,6 +23,14 @@ export async function handleApiMessage(
     const handler = apiModule?.[method];
     if (typeof handler !== "function") {
       send({ type: "apiNotFound" });
+      return;
+    }
+    if (bodyError) {
+      send({
+        type: "apiResponse",
+        status: bodyError.status,
+        body: { error: bodyError.message },
+      });
       return;
     }
     const result = await handler({ method, url, headers, body, params });

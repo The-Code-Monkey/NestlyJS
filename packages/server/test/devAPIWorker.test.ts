@@ -101,6 +101,7 @@ describe("devAPIHandler", () => {
       url,
       headers: undefined,
       body: { ok: true },
+      bodyError: undefined,
       params: { slug: "hello" },
     });
 
@@ -184,7 +185,7 @@ describe("devAPIHandler", () => {
     expect(child.send).toHaveBeenCalledTimes(2);
   });
 
-  it("returns a body parsing error", async () => {
+  it("lets the child decide a body parsing error", async () => {
     m.readBody.mockRejectedValue(
       new RequestBodyError(400, "Invalid JSON")
     );
@@ -196,6 +197,20 @@ describe("devAPIHandler", () => {
       res as any,
       request(url)
     );
+
+    expect(m.fork).toHaveBeenCalledTimes(1);
+    const child = m.children[0];
+    expect(child.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bodyError: { status: 400, message: "Invalid JSON" },
+      })
+    );
+
+    child.handlers.message({
+      type: "apiResponse",
+      status: 400,
+      body: { error: "Invalid JSON" },
+    });
 
     expect(res.writeHead).toHaveBeenCalledWith(400, {
       "Content-Type": "application/json",

@@ -2,11 +2,11 @@ import fs from "fs";
 import path from "path";
 import {
   bestMatch,
-  parseUrlSegments,
   toPatternSegment,
   type PatternSegment,
   type RouteParams,
 } from "./routePatterns";
+import { parseRequestPath } from "./requestPath";
 
 export interface RouteFiles {
   routeDir: string;
@@ -74,9 +74,18 @@ function collectCandidates(
  * rank segment kinds the same way.
  */
 export function resolveRoute(urlPath: string): ResolvedRoute | null {
-  const segments = parseUrlSegments(urlPath);
+  const segments = parseRequestPath(urlPath)?.segments;
   if (!segments) return null;
+  return resolveRouteSegments(segments);
+}
 
+/**
+ * Resolves decoded URL segments to the closest route directory and params.
+ * Adapters that already parsed the request path use this directly.
+ */
+export function resolveRouteSegments(
+  segments: string[]
+): ResolvedRoute | null {
   const candidates: RouteCandidate[] = [];
   collectCandidates(path.join(process.cwd(), "routes"), [], candidates);
 
@@ -89,44 +98,4 @@ export function resolveRoute(urlPath: string): ResolvedRoute | null {
     apiFile: path.join(best.routeDir, "api.ts"),
     params: best.params,
   };
-}
-
-/**
- * Determines if a GET request should be handled by page.tsx
- */
-export function hasPageForGET(urlPath: string): boolean {
-  const route = resolveRoute(urlPath);
-  return !!route && fs.existsSync(route.pageFile);
-}
-
-export interface APIRoute {
-  handler: Function;
-  route: ResolvedRoute;
-}
-
-/**
- * Resolves the API handler and params for a method and URL.
- */
-export function getAPIRoute(
-  urlPath: string,
-  method: string
-): APIRoute | null {
-  const route = resolveRoute(urlPath);
-  if (!route || !fs.existsSync(route.apiFile)) return null;
-
-  // GET requests prefer page.tsx if it exists
-  if (method.toUpperCase() === "GET" && fs.existsSync(route.pageFile)) {
-    return null;
-  }
-
-  const apiModule = require(route.apiFile);
-  const handler = apiModule[method.toUpperCase()];
-  return typeof handler === "function" ? { handler, route } : null;
-}
-
-/**
- * Returns the API method handler for a method and URL.
- */
-export function getAPIMethod(urlPath: string, method: string): Function | null {
-  return getAPIRoute(urlPath, method)?.handler ?? null;
 }

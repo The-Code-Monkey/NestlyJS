@@ -24,7 +24,7 @@ describe("decideRequest", () => {
     const head = decideRequest("/_nestly/client/app.js", "HEAD", lookup);
 
     expect(get.kind).toBe("clientAsset");
-    expect(get.assetPath).toBe("app.js");
+    expect(get.assetSegments).toEqual(["app.js"]);
     expect(head.kind).toBe("clientAsset");
     expect(lookup).not.toHaveBeenCalled();
   });
@@ -97,6 +97,17 @@ describe("decideRequest", () => {
     expect(decision.url).toBe("/hooks/1");
   });
 
+  it("returns not found for a non-GET route with no API method", () => {
+    const lookup = lookupReturning({
+      route: "api",
+      params: {},
+      hasPage: false,
+      hasApi: false,
+    });
+
+    expect(decideRequest("/hooks", "POST", lookup).kind).toBe("notFound");
+  });
+
   it("returns not found for a non-GET page-only route", () => {
     const lookup = lookupReturning({
       route: "page",
@@ -128,7 +139,9 @@ describe("decideRequest", () => {
       lookup
     );
 
-    expect(lookup).toHaveBeenCalledWith("/blog/hello");
+    expect(lookup).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/blog/hello", segments: ["blog", "hello"] })
+    );
     expect(decision.path).toBe("/blog/hello");
     expect(decision.url).toBe("/blog/hello?tab=a#section");
   });
@@ -213,6 +226,14 @@ describe("decideRequest", () => {
 });
 
 describe("notFoundResponse", () => {
+  it("uses the shared asset message", () => {
+    expect(notFoundResponse("GET", "asset")).toEqual({
+      status: 404,
+      body: "Not found",
+    });
+    expect(notFoundResponse("POST", "asset").body).toBe("Not found");
+  });
+
   it("uses the page message for GET", () => {
     expect(notFoundResponse("GET")).toEqual({
       status: 404,

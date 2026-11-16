@@ -5,19 +5,26 @@ import http from "http";
 import os from "os";
 import { devSSRHandler } from "./devSSRWorker";
 import { devAPIHandler } from "./devAPIWorker";
-import { resolveRoute, type ResolvedRoute } from "./routeResolver";
+import { resolveRouteSegments, type ResolvedRoute } from "./routeResolver";
 import { serveClientAsset, serveStaticAsset } from "./staticAssets";
-import { HMR_PATH, hmrHandler, startHmrWatcher } from "./hmr";
+import {
+  HMR_PATH,
+  closeHmrClients,
+  hmrHandler,
+  startHmrWatcher,
+} from "./hmr";
 import {
   decideRequest,
   notFoundResponse,
+  type RequestDecision,
   type RouteResolution,
 } from "./requestPipeline";
+import type { ParsedRequestPath } from "./requestPath";
 
 function lookupDevRoute(
-  path: string
+  request: ParsedRequestPath
 ): RouteResolution<ResolvedRoute> | null {
-  const route = resolveRoute(path);
+  const route = resolveRouteSegments(request.segments);
   if (!route) return null;
 
   return {
@@ -26,6 +33,46 @@ function lookupDevRoute(
     hasPage: fs.existsSync(route.pageFile),
     hasApi: fs.existsSync(route.apiFile),
   };
+}
+
+export async function executeDevDecision(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  decision: RequestDecision<ResolvedRoute>
+) {
+  switch (decision.kind) {
+    case "clientAsset":
+      serveClientAsset(req, res, decision.assetSegments);
+      return;
+
+    case "staticAsset":
+      serveStaticAsset(req, res, decision.segments);
+      return;
+
+    case "page":
+      await devSSRHandler(req, res, {
+        pageFile: decision.route.pageFile,
+        url: decision.url,
+        params: decision.params,
+      });
+      return;
+
+    case "api":
+      await devAPIHandler(req, res, {
+        apiFile: decision.route.apiFile,
+        method: decision.method,
+        url: decision.url,
+        params: decision.params,
+      });
+      return;
+
+    case "notFound": {
+      const notFound = notFoundResponse(decision.method);
+      res.writeHead(notFound.status);
+      res.end(notFound.body);
+      return;
+    }
+  }
 }
 
 export function start({
@@ -38,15 +85,39 @@ export function start({
   if (cluster.isPrimary) {
     console.log(`[MASTER] Dev Master ${process.pid} running`);
 
+    const forkWorker = () => {
+      const worker = cluster.fork({ PORT: port.toString() });
+      // A worker can lose its IPC channel before shutdown reaches it. Ignore
+      // the resulting EPIPE instead of crashing the primary.
+      worker?.on?.("error", (err: NodeJS.ErrnoException) => {
+        if (err.code !== "EPIPE") {
+          console.error(`[MASTER] Worker error:`, err);
+        }
+      });
+      return worker;
+    };
+
     // Fork workers
     for (let i = 0; i < numWorkers; i++) {
-      cluster.fork({ PORT: port.toString() });
+      forkWorker();
     }
 
     cluster.on("exit", (worker) => {
       console.log(`[MASTER] Worker ${worker.process?.pid} died. Restarting...`);
-      cluster.fork({ PORT: port.toString() });
+      forkWorker();
     });
+
+    let shuttingDown = false;
+    const shutdown = () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      cluster.removeAllListeners("exit");
+      cluster.disconnect(() => process.exit(0));
+      setTimeout(() => process.exit(1), 5000).unref();
+    };
+    process.once("SIGTERM", shutdown);
+    process.once("SIGINT", shutdown);
+    return;
   } else {
     startHmrWatcher();
 
@@ -61,45 +132,8 @@ export function start({
           return;
         }
 
-        const decision = decideRequest(
-          urlPath,
-          method,
-          lookupDevRoute
-        );
-
-        switch (decision.kind) {
-          case "clientAsset":
-            serveClientAsset(req, res, decision.assetPath);
-            return;
-
-          case "staticAsset":
-            serveStaticAsset(req, res, decision.path);
-            return;
-
-          case "page":
-            await devSSRHandler(req, res, {
-              pageFile: decision.route.pageFile,
-              url: decision.url,
-              params: decision.params,
-            });
-            return;
-
-          case "api":
-            await devAPIHandler(req, res, {
-              apiFile: decision.route.apiFile,
-              method: decision.method,
-              url: decision.url,
-              params: decision.params,
-            });
-            return;
-
-          case "notFound": {
-            const notFound = notFoundResponse(decision.method);
-            res.writeHead(notFound.status);
-            res.end(notFound.body);
-            return;
-          }
-        }
+        const decision = decideRequest(urlPath, method, lookupDevRoute);
+        await executeDevDecision(req, res, decision);
       } catch (err) {
         console.error(`[WORKER ${process.pid}] Error handling request:`, err);
         res.writeHead(500);
@@ -112,5 +146,17 @@ export function start({
         `[WORKER ${process.pid}] Listening on http://${host || "localhost"}:${port}`
       );
     });
+
+    let shuttingDown = false;
+    const shutdown = () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      closeHmrClients();
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(1), 5000).unref();
+    };
+    process.once("SIGTERM", shutdown);
+    process.once("SIGINT", shutdown);
+    process.once("disconnect", shutdown);
   }
 }

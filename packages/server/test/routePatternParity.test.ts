@@ -35,6 +35,7 @@ function writeFixture() {
   write("routes/docs/[[...slug]]/page.tsx", page);
   write("routes/(marketing)/about/page.tsx", page);
   write("routes/(group)/archive/page.tsx", page);
+  write("routes/(a)/(b)/nested/[id]/page.tsx", page);
   write("routes/[id]/page.tsx", page);
   write("routes/[slug]/page.tsx", page);
   write(
@@ -105,6 +106,12 @@ const cases: Case[] = [
     dir: "(group)/archive",
     params: {},
     pattern: [{ kind: "static", value: "archive" }],
+  },
+  {
+    url: "/nested/value",
+    dir: "(a)/(b)/nested/[id]",
+    params: { id: "value" },
+    pattern: [{ kind: "static", value: "nested" }, { kind: "dynamic", name: "id" }],
   },
   {
     url: "/value",

@@ -2,6 +2,14 @@ import fs from "fs";
 import path from "path";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Stats } from "fs";
+import { notFoundResponse } from "./requestPipeline";
+import {
+  cleanUrlPath,
+  isStaticAssetPath,
+  parseRequestPath,
+} from "./requestPath";
+
+export { cleanUrlPath, isStaticAssetPath };
 
 const MIME_TYPES: Record<string, string> = {
   html: "text/html; charset=utf-8",
@@ -37,42 +45,23 @@ interface StaticFile {
   contentType: string;
 }
 
-export function cleanUrlPath(urlPath: string) {
-  return urlPath.split(/[?#]/)[0] || "/";
+function toSegments(input: string | string[]): string[] | null {
+  if (Array.isArray(input)) return input;
+  return parseRequestPath(input)?.segments ?? null;
 }
 
-/**
- * Static assets are recognized by a file extension on the last URL segment.
- * Application routes never use file extensions.
- */
-export function isStaticAssetPath(urlPath: string) {
-  const cleanPath = cleanUrlPath(urlPath);
-  const rawSegment = cleanPath.split("/").filter(Boolean).pop() || "";
-
-  let lastSegment: string;
-  try {
-    lastSegment = decodeURIComponent(rawSegment);
-  } catch {
-    return false;
-  }
-
-  return /\.[A-Za-z0-9]+$/.test(lastSegment);
+function toAssetSegments(input: string | string[]): string[] | null {
+  if (Array.isArray(input)) return input;
+  const parsed = parseRequestPath(input);
+  return parsed?.clientAssetSegments ?? parsed?.segments ?? null;
 }
 
-function resolveStaticFile(rootPath: string, urlPath: string): StaticFile | null {
-  const cleanPath = cleanUrlPath(urlPath);
-
-  let segments: string[];
-  try {
-    segments = cleanPath
-      .split("/")
-      .filter(Boolean)
-      .map((segment) => decodeURIComponent(segment));
-  } catch {
-    return null;
-  }
-
+function resolveStaticFile(
+  rootPath: string,
+  segments: string[] | null
+): StaticFile | null {
   if (
+    !segments ||
     segments.length === 0 ||
     segments.some(
       (segment) =>
@@ -120,12 +109,15 @@ function resolveStaticFile(rootPath: string, urlPath: string): StaticFile | null
 export function serveStaticAsset(
   req: IncomingMessage,
   res: ServerResponse,
-  urlPath: string
+  pathOrSegments: string | string[]
 ) {
   serveFile(
     req,
     res,
-    resolveStaticFile(path.join(process.cwd(), "public"), urlPath),
+    resolveStaticFile(
+      path.join(process.cwd(), "public"),
+      toSegments(pathOrSegments)
+    ),
     "no-store"
   );
 }
@@ -137,8 +129,9 @@ function serveFile(
   cacheControl: string
 ) {
   if (!file) {
-    res.writeHead(404);
-    res.end("Not found");
+    const notFound = notFoundResponse(req.method || "GET", "asset");
+    res.writeHead(notFound.status);
+    res.end(notFound.body);
     return;
   }
 
@@ -167,12 +160,15 @@ function serveFile(
 export function serveClientAsset(
   req: IncomingMessage,
   res: ServerResponse,
-  urlPath: string
+  pathOrSegments: string | string[]
 ) {
   serveFile(
     req,
     res,
-    resolveStaticFile(path.join(process.cwd(), ".nestly", "client"), urlPath),
+    resolveStaticFile(
+      path.join(process.cwd(), ".nestly", "client"),
+      toAssetSegments(pathOrSegments)
+    ),
     "public, max-age=31536000, immutable"
   );
 }

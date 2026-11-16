@@ -1,3 +1,5 @@
+import { parseRequestPath } from "./requestPath";
+
 export type SegmentKind =
   | "static"
   | "dynamic"
@@ -102,23 +104,13 @@ export function compareScore(left: number[], right: number[]) {
   return left.length - right.length;
 }
 
-export function patternKey(pattern: PatternSegment[]) {
-  return pattern
-    .map((part) =>
-      part.kind === "static"
-        ? `static:${part.value}`
-        : `${part.kind}:${part.name}`
-    )
-    .join("/");
-}
-
-export function rankMatches<
-  T extends { score: number[]; pattern: PatternSegment[] }
->(matches: T[]): T[] {
-  return [...matches].sort(
-    (left, right) =>
-      compareScore(left.score, right.score) ||
-      patternKey(left.pattern).localeCompare(patternKey(right.pattern))
+export function rankMatches<T extends { score: number[] }>(
+  matches: T[]
+): T[] {
+  // Equal specificity keeps the adapter's directory order. Array#sort is
+  // stable, so the first collected route wins, as ADR 0002 requires.
+  return [...matches].sort((left, right) =>
+    compareScore(left.score, right.score)
   );
 }
 
@@ -134,29 +126,5 @@ export function bestMatch<T extends { pattern: PatternSegment[] }>(
 }
 
 export function parseUrlSegments(urlPath: string): string[] | null {
-  const cleanPath = urlPath.split(/[?#]/)[0] || "/";
-
-  let segments: string[];
-  try {
-    segments = cleanPath
-      .split("/")
-      .filter(Boolean)
-      .map((segment) => decodeURIComponent(segment));
-  } catch {
-    return null;
-  }
-
-  if (
-    segments.some(
-      (segment) =>
-        segment === "." ||
-        segment === ".." ||
-        segment.includes("/") ||
-        segment.includes("\\")
-    )
-  ) {
-    return null;
-  }
-
-  return segments;
+  return parseRequestPath(urlPath)?.segments ?? null;
 }
