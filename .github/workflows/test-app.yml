@@ -29,6 +29,9 @@ jobs:
       - name: Run unit tests
         run: pnpm test
 
+      - name: Check release workflow guards
+        run: node scripts/check-release-workflow.mjs
+
       - name: Build Server
         run: pnpm --filter @nestlyjs/server build
 
