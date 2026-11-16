@@ -82,7 +82,7 @@ pnpm exec changeset
 - CommonJS modules. Dev child processes rely on `ts-node/register`.
 - React 19.
 - pnpm 12.21.0, pinned through `packageManager` in `package.json`; workspace packages are declared in `pnpm-workspace.yaml`.
-- Node 26 in `.nvmrc`; root `engines` allows `>=20`.
+- Node 26 in `.nvmrc`; root and package `engines` require `>=22.22`, the floor set by `chokidar@6`.
 - Route app root is `process.cwd()`.
 - Pages and layouts use a default export.
 - API routes use named exports matching HTTP methods, such as `GET`, `POST`, `PUT`.
