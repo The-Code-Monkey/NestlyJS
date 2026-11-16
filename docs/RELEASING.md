@@ -51,7 +51,7 @@ That is the difference between `merge-base --is-ancestor` (a step the pusher can
 
 ### What is still not protected
 
-- **Self-merged pull requests.** The ruleset requires a pull request but no approving review, because a solo maintainer cannot approve their own. An edited `publish.yml` still cannot be pushed silently, but it can be merged by the person who wrote it. Adding a second maintainer and a required approval — or required reviewers on the `npm-publish` environment, now that the repository is public — closes that. Both add a human approval to every release.
+- **Self-merged pull requests.** The ruleset requires a pull request but no approving review, because a solo maintainer cannot approve their own. An edited `publish.yml` cannot be pushed silently, but it can be merged by the person who wrote it. Closing that needs a reviewer who is not the merger: a second maintainer plus a required approval, or required reviewers on the `npm-publish` environment with "Prevent self-review" enabled. Required reviewers alone are not enough when the only reviewer is the person merging, and either option adds a human approval to every release.
 - **A compromised workflow with approved changes.** If someone can merge a malicious `publish.yml` through a pull request, no in-repo check survives. Only npm staged publishing (`npm stage publish` plus a 2FA approval per release) or a trusted publisher in a separate repository survives a fully compromised workflow.
 - **Anyone who can change repository settings** can remove the environment policy or bypass it, just as they could delete the workflow. Settings access is equivalent to publish access.
 - **Unpublishing.** A published version cannot be reused. Fix forward with a patch release.
@@ -83,13 +83,15 @@ Package settings on npmjs.com for `@nestlyjs/server`:
 2. Merge the pull request. `release.yml` runs tests, builds, checks the package contents, and opens or updates `chore: release packages` with the new version and changelog.
 3. Approve the version PR's `Test Test-App` run if GitHub marked it `action_required` (see below), then merge it.
 4. `publish.yml` publishes over OIDC, writes the git tag `@nestlyjs/server@X.Y.Z`, and creates the GitHub release.
-5. Verify:
+5. Verify the artifact that was actually published, in an empty directory:
 
    ```sh
-   npm view @nestlyjs/server dist-tags versions
+   dir=$(mktemp -d)
+   npm install --prefix "$dir" @nestlyjs/server@X.Y.Z
+   npm audit signatures --prefix "$dir" --include-attestations
    ```
 
-   `npm audit signatures` in a project that has the package installed verifies the registry signature and the provenance attestation.
+   The output must name the version just published and its provenance attestation. Running the command in a project that already had an older version proves nothing about the new release.
 
 ### Why the version PR needs an approval click
 
