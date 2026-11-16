@@ -22,7 +22,7 @@ PR with a changeset ──merge──▶ release.yml ──▶ version PR (versi
 
 `release.yml` runs `changeset version`, which consumes changesets, bumps `packages/server/package.json`, and opens or updates the `chore: release packages` pull request. It never contacts npm.
 
-`publish.yml` runs `changeset publish`, pushes the git tag, and creates the GitHub release. npm authenticates the workflow with a short-lived OIDC token. Provenance attestations are not generated while this repository is private; npm only attests publishes from public repositories, so publishing the repository would add them without touching the workflow.
+`publish.yml` runs `changeset publish`, pushes the git tag, and creates the GitHub release. npm authenticates the workflow with a short-lived OIDC token. The repository is public, so publishes carry provenance attestations from the next release onward; `0.2.0` and `0.2.1` predate that.
 
 ## What stops a deploy
 
@@ -36,8 +36,8 @@ GitHub runs the workflow file **from the ref being pushed**, so everything writt
 | Push a fork and run its copy | `github.repository` fails immediately, and the OIDC token would identify the fork, which npm rejects. |
 | Re-run a workflow against a commit that is not on `main` | The first step refuses unless the commit is an ancestor of `origin/main`. |
 | Add an npm token instead of OIDC | The package disallows token publishing and no token exists. |
-| Direct-push a commit to `main` | The commit is not associated with a merged pull request, and the workflow refuses to publish it. GitHub records that association server-side; a commit message cannot forge it. |
-| **Edit `publish.yml` and push it directly to `main`** | **This publishes.** The workflow that runs is the edited one, and it can drop every check above. Only a GitHub-side rule on `main` or an npm-side approval stops this; see below. |
+| Direct-push any commit to `main` | The `main` ruleset rejects the push; changes must arrive through a pull request. Belt and braces, the workflow also refuses commits that are not associated with a merged pull request. |
+| **Edit `publish.yml` and push it directly to `main`** | **Blocked by the `main` ruleset.** The edit has to go through a pull request, so it is visible and reviewable before it runs. |
 
 ### Why the environment is load-bearing
 
@@ -51,11 +51,8 @@ That is the difference between `merge-base --is-ancestor` (a step the pusher can
 
 ### What is still not protected
 
-- **A direct push that also edits `publish.yml`.** A maintainer with write access can push an edited workflow straight to `main`; the edited file runs, removes its own checks, and publishes. No in-repo check can prevent this, because the attacker writes the code that performs the check. The possible fixes all sit outside the workflow:
-  - **Protect `main`.** Branch protection and rulesets return `Upgrade to GitHub Pro or make this repository public` on this plan. Making the repository public or upgrading the plan allows requiring pull requests, blocking direct and force pushes, and running status checks before merge. A solo maintainer can still merge their own pull request, so this removes silent pushes, not self-review.
-  - **Approve each publish on npm.** Switching the trusted publisher to `npm stage publish` stages every version until a maintainer approves it with 2FA via the CLI or npmjs.com. This is the only control that survives a fully compromised workflow, and it gives up hands-off releases.
-  - **Publish from a repository the attacker cannot write to.** Move `publish.yml` to a separate repository owned by the same org, register that repository and workflow as the trusted publisher, and have it check out this one at a merged commit. App-repository write access then no longer implies publish access.
-- **Required reviewers on the environment are unavailable here.** The API refuses them: `Please ensure the billing plan supports the required reviewers protection rule`.
+- **Self-merged pull requests.** The ruleset requires a pull request but no approving review, because a solo maintainer cannot approve their own. An edited `publish.yml` still cannot be pushed silently, but it can be merged by the person who wrote it. Adding a second maintainer and a required approval — or required reviewers on the `npm-publish` environment, now that the repository is public — closes that. Both add a human approval to every release.
+- **A compromised workflow with approved changes.** If someone can merge a malicious `publish.yml` through a pull request, no in-repo check survives. Only npm staged publishing (`npm stage publish` plus a 2FA approval per release) or a trusted publisher in a separate repository survives a fully compromised workflow.
 - **Anyone who can change repository settings** can remove the environment policy or bypass it, just as they could delete the workflow. Settings access is equivalent to publish access.
 - **Unpublishing.** A published version cannot be reused. Fix forward with a patch release.
 
@@ -72,7 +69,7 @@ Package settings on npmjs.com for `@nestlyjs/server`:
 
 - Actions must be allowed to create pull requests (`Settings → Actions → General → Allow GitHub Actions to create and approve pull requests`). Without it the version PR cannot be opened.
 - The `npm-publish` environment must keep its branch policy limited to `main`, with administrator bypass disabled.
-- Consider protecting `main` (public repository or a paid plan) so changes cannot bypass pull requests.
+- `main` must stay protected by the `main` ruleset: pull requests required, no direct or force pushes, no deletion, the `test` check required, and no bypass actors so administrators are bound too.
 - The publish workflow must stay named `publish.yml`. npm matches the filename exactly.
 
 ## A normal release
@@ -92,7 +89,7 @@ Package settings on npmjs.com for `@nestlyjs/server`:
    npm view @nestlyjs/server dist-tags versions
    ```
 
-   `npm audit signatures` in a project that has the package installed verifies the registry signature. Provenance is absent until the repository is public.
+   `npm audit signatures` in a project that has the package installed verifies the registry signature and the provenance attestation.
 
 ### Why the version PR needs an approval click
 
