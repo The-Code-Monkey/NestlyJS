@@ -1,0 +1,73 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Git tags and GitHub releases for the published version.
+      contents: write
+      # npm trusted publishing. No npm token is stored in this repository.
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12.21.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Server
+        run: pnpm --filter @nestlyjs/server build
+
+      - name: Check package contents
+        run: node scripts/check-pack.mjs
+
+      # Publishing before `changeset version` has run would push an unversioned
+      # package, and CI must never publish a prerelease. Prereleases are
+      # published by hand; see docs/RELEASING.md.
+      - name: Check release state
+        id: release-state
+        run: |
+          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+          if [ -f .changeset/pre.json ]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "Prerelease mode is active; skipping publish."
+          elif [ "$pending" != "0" ]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "Pending changesets; waiting for the version pull request."
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "Versioned tree with no pending changesets; publishing."
+          fi
+
+      - name: Publish to npm
+        if: steps.release-state.outputs.pending == '0' && steps.release-state.outputs.prerelease == 'false'
+        uses: changesets/action/publish@v2.1.2
+        with:
+          script: pnpm exec changeset publish
+          create-github-releases: true
+          push-git-tags: true

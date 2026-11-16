@@ -42,8 +42,10 @@ const supervisor = createSupervisor<http.ServerResponse, RenderReply>({
     console.log(`[SSR WORKER] Responded for ${reply.url}`);
   },
   fail(res, reason) {
+    // The client gets a generic message; the reason stays in the server log.
+    console.error(`[SSR WORKER] Failing a response: ${reason}`);
     res.writeHead(500);
-    res.end(reason);
+    res.end("Internal server error");
   },
   onExit(key, code, signal) {
     console.warn(

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,31 +23,49 @@ const raw = execFileSync(
 const [result] = JSON.parse(raw);
 const files = new Set(result.files.map((entry) => entry.path));
 
+function listBuiltFiles(dir, prefix) {
+  const found = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const relative = `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) {
+      found.push(...listBuiltFiles(path.join(dir, entry.name), relative));
+    } else {
+      found.push(relative);
+    }
+  }
+  return found;
+}
+
+const errors = [];
+const distDir = path.join(packageDir, "dist");
+
+// Every built module ships. Reading `dist` instead of a hand-written module
+// list means a new module cannot be added to the build and forgotten here.
+let builtFiles = [];
+if (!fs.existsSync(distDir)) {
+  errors.push("dist/ is missing; run the server build first");
+} else {
+  builtFiles = listBuiltFiles(distDir, "dist");
+  if (builtFiles.length === 0) errors.push("dist/ is empty");
+}
+
 const required = [
   "package.json",
   "README.md",
   "LICENSE",
   "tsconfig.devServer.json",
-  "dist/bin/nestly.js",
-  "dist/build.js",
-  "dist/bundler.js",
-  "dist/devAPIChild.js",
-  "dist/devAPIWorker.js",
-  "dist/devChildWorker.js",
-  "dist/devServer.js",
-  "dist/devSSRWorker.js",
-  "dist/devRefresh.js",
-  "dist/hmr.js",
-  "dist/htmlCache.js",
-  "dist/manifest.js",
-  "dist/pageDocument.js",
-  "dist/prodRouter.js",
-  "dist/routePatterns.js",
-  "dist/routeResolver.js",
-  "dist/shim.js",
-  "dist/staticAssets.js",
-  "dist/supervisedChild.js",
+  ...builtFiles,
 ];
+
+const packageJson = JSON.parse(
+  fs.readFileSync(path.join(packageDir, "package.json"), "utf8")
+);
+const binTarget = packageJson.bin?.nestly;
+if (!binTarget) {
+  errors.push("package.json declares no nestly bin");
+} else if (!files.has(binTarget)) {
+  errors.push(`missing bin target: ${binTarget}`);
+}
 
 const forbiddenPrefixes = ["src/", "test/", "routes/"];
 const forbiddenFiles = [
@@ -57,8 +76,6 @@ const forbiddenFiles = [
   "dist/devRenderer.js",
   "dist/ssrWorker.js",
 ];
-
-const errors = [];
 
 for (const file of required) {
   if (!files.has(file)) errors.push(`missing required file: ${file}`);

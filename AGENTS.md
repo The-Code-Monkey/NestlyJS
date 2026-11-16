@@ -87,17 +87,20 @@ pnpm exec changeset
 - Pages and layouts use a default export.
 - API routes use named exports matching HTTP methods, such as `GET`, `POST`, `PUT`.
 - Changes to `@nestlyjs/server` need a `.changeset` entry.
-- Merging to `main` runs Changesets; the version PR publishes with `NPM_TOKEN`.
+- Publishing uses npm trusted publishing over OIDC; no npm token exists. See `docs/RELEASING.md` before touching a release workflow.
+- Merging to `main` runs the Release workflow, which opens the version PR; merging that PR publishes over OIDC.
 - Renovate automerge is enabled.
 - Vitest with v8 coverage. Run `pnpm test` from the repo root.
 - The server package ships only `dist/` and `tsconfig.devServer.json`. Verify with `node scripts/check-pack.mjs` after building.
 
 ## Known gaps and warnings
 
-- Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is not at 100%.
+- Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is 95%; `requestBody.ts` is the thinnest at 80%.
 - Fast Refresh applies to client components. Page, layout, API, and public asset changes still reload. State resets when hook order changes.
-- Nested layout resolution relies on string replacement and cwd-relative paths.
-- Worker failures are surfaced as generic 500 responses. Custom 404/500 pages are not implemented.
+- Layout discovery walks from the page directory up to `process.cwd()/routes`. A page outside that root renders with no layouts instead of failing.
+- Worker failures are surfaced as generic 500 responses. Custom 404/500 pages are not implemented and 404 bodies are plain text.
+- The package has no `main`, `types`, or `exports` field. It is CLI-only and reserves no public library API.
+- Only `page.tsx`, `layout.tsx`, and `api.ts` are recognized. `.jsx` and `.ts` pages are ignored.
 
 ## Rules for agents
 
