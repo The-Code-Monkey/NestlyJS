@@ -130,7 +130,7 @@ export default function Counter() {
   stop(server);
   server = null;
 
-  // Development path: routes compile through ts-node and the SSR child loads
+  // Development path: routes compile through tsx and the SSR child loads
   // the client bundler, so a dev-only dependency problem fails here instead of
   // in a user's app.
   const devPort = port + 1;

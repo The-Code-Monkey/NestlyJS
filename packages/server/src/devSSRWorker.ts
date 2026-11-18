@@ -20,25 +20,18 @@ interface RenderReply {
 }
 
 const DEV_TSCONFIG = path.resolve(__dirname, "..", "tsconfig.devServer.json");
-const DEV_COMPILER_OPTIONS = JSON.parse(
-  fs.readFileSync(DEV_TSCONFIG, "utf8")
-).compilerOptions;
-
+const TSX_CJS = require.resolve("tsx/cjs");
 /**
- * ts-node resolves its default `node_modules` ignore against the tsconfig's
- * directory. An installed package's tsconfig lives inside node_modules, so
- * every app dependency resolves to a `../../` path that the default ignore no
- * longer matches, and ts-node then tries to require ESM-only dependencies as
- * CommonJS. Skipping the project keeps the same compiler options but makes the
- * ignore base the app root, so only the app's own files are compiled.
+ * tsx transpiles route source with esbuild, so the development child does not
+ * depend on the TypeScript compiler API. The shipped tsconfig supplies the JSX
+ * and module settings for apps that do not have their own.
  */
 function forkPageChild(): ChildLike {
   return fork(path.resolve(__dirname, "devChildWorker.js"), {
-    execArgv: ["-r", "ts-node/register"],
+    execArgv: ["-r", TSX_CJS],
     env: {
       ...process.env,
-      TS_NODE_SKIP_PROJECT: "true",
-      TS_NODE_COMPILER_OPTIONS: JSON.stringify(DEV_COMPILER_OPTIONS),
+      TSX_TSCONFIG_PATH: DEV_TSCONFIG,
     },
   }) as ChildLike;
 }
