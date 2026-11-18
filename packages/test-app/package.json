@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nestly dev",
     "start": "nestly start",
-    "test:routes": "ts-node test/routes.test.ts",
+    "test:routes": "tsx test/routes.test.ts",
     "build": "echo 'Building...'"
   },
   "dependencies": {
@@ -16,9 +16,9 @@
   },
   "devDependencies": {
     "@types/node": "26.6.6",
-    "ts-node": "10.9.2",
-    "typescript": "5.9.3",
     "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0"
+    "@types/react-dom": "19.3.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
   }
 }

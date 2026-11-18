@@ -68,7 +68,7 @@ Known gaps:
 
 ## Development
 
-- Dev child processes use `ts-node/register`.
+- Dev child processes use `tsx/cjs`.
 - Production routes are compiled with esbuild and served by clustered workers.
 - The package ships `dist/` and `tsconfig.devServer.json`. Verify with `node scripts/check-pack.mjs` in the repo.
 

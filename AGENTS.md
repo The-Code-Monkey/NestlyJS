@@ -46,7 +46,7 @@ Working:
 - `src/staticAssets.ts` — streams files from `process.cwd()/public` and `.nestly/client`, maps extensions to content types, and rejects traversal and symlink escapes.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
 - `src/requestPipeline.ts` — turns a URL and method into one decision: client asset, static asset, Page, API route, or not found, with params and route identity. Dev and production executors consume the decision instead of resolving again.
-- `src/devSSRWorker.ts` — forks one child per URL path through `supervisedChild`, passes route params, registers `ts-node/register`, watches all of `routes/`, and kills page children on any route change.
+- `src/devSSRWorker.ts` — forks one child per URL path through `supervisedChild`, passes route params, registers `tsx/cjs`, watches all of `routes/`, and kills page children on any route change.
 - `src/renderer.tsx` — shared SSR helpers: element walking and client wrapping. Page Document owns document assembly and hydration markup.
 - `src/pageDocument.ts` — pure Page Document assembly: head and body injection order plus hydration markup. Dev and production adapters supply different asset plans.
 - `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and supplies the development asset plan.
@@ -84,7 +84,7 @@ pnpm exec changeset
 ## Conventions
 
 - TypeScript with `strict: true`.
-- CommonJS modules. Dev child processes rely on `ts-node/register`.
+- CommonJS modules. Dev child processes rely on `tsx/cjs`.
 - React 19.
 - pnpm 12.21.0, pinned through `packageManager` in `package.json`; workspace packages are declared in `pnpm-workspace.yaml`.
 - Node 26 in `.nvmrc`; root and package `engines` require `>=22.22`, the floor set by `chokidar@6`.
@@ -111,7 +111,7 @@ pnpm exec changeset
 ## Rules for agents
 
 - Read `src/routeResolver.ts` before changing routing.
-- Keep the CommonJS and `ts-node/register` development model unless the task explicitly changes it.
+- Keep the CommonJS and `tsx/cjs` development model unless the task explicitly changes it.
 - Do not add dependencies without a clear need.
 - Add a changeset when modifying `packages/server`.
 - Run the server build, unit tests, and a dev-server smoke test after behavior changes. Run the production build/start suite for runtime changes.
