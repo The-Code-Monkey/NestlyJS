@@ -124,12 +124,36 @@ describe("rankMatches", () => {
     ).toHaveProperty("slug", undefined);
   });
 
-  it("breaks equal specificity ties by pattern order", () => {
+  it("ranks route groups by their URL pattern", () => {
+    const winner = best("/about", [
+      { dir: "(marketing)/about", pattern: [staticSegment("about")] },
+      { dir: "(docs)/[slug]", pattern: [dynamic("slug")] },
+    ]);
+    expect(winner?.dir).toBe("(marketing)/about");
+  });
+
+  it("ranks nested route groups by their URL pattern", () => {
+    const winner = best("/about", [
+      { dir: "(a)/(b)/about", pattern: [staticSegment("about")] },
+      { dir: "(c)/[slug]", pattern: [dynamic("slug")] },
+    ]);
+    expect(winner?.dir).toBe("(a)/(b)/about");
+  });
+
+  it("keeps directory order for equal specificity", () => {
     const winner = best("/value", [
       { dir: "[slug]", pattern: [dynamic("slug")] },
       { dir: "[id]", pattern: [dynamic("id")] },
     ]);
-    expect(winner?.dir).toBe("[id]");
+    expect(winner?.dir).toBe("[slug]");
+  });
+
+  it("keeps directory order across route groups", () => {
+    const winner = best("/value", [
+      { dir: "(a)/[z]", pattern: [dynamic("z")] },
+      { dir: "(c)/[a]", pattern: [dynamic("a")] },
+    ]);
+    expect(winner?.dir).toBe("(a)/[z]");
   });
 });
 

@@ -13,7 +13,7 @@
 - Static assets served from `public/` by extension-addressed paths, streamed with `GET` and `HEAD`.
 - Production build into `.nestly/` with hashed client assets and shared chunks.
 - `nestly start` serves production pages, APIs, static files, and built assets.
-- HTML, JavaScript, and CSS cached per page; any route file change triggers a full reload.
+- HTML, JavaScript, and CSS cached per page; Page, Layout, API, and non-client route file changes trigger a full reload.
 - API handlers return `{ status, body }` with a JSON body and receive parsed request bodies.
 - Production HTML cache, graceful shutdown, and `--host`/`HOST` binding.
 - Query strings and fragments are ignored during route lookup.

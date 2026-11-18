@@ -66,6 +66,22 @@ function ensureKeepalive() {
   keepalive.unref();
 }
 
+/**
+ * Ends every open HMR stream and stops the keepalive timer. Callers use this
+ * during graceful shutdown so SSE connections cannot hold the server open.
+ */
+export function closeHmrClients() {
+  for (const res of clients.keys()) {
+    if (!res.writableEnded) res.end();
+  }
+  clients.clear();
+
+  if (keepalive) {
+    clearInterval(keepalive);
+    keepalive = null;
+  }
+}
+
 export function hmrHandler(req: IncomingMessage, res: ServerResponse) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -106,8 +122,21 @@ function reload(res: ServerResponse, filePath: string) {
 const SERVER_FILES = new Set(["page.tsx", "layout.tsx", "api.ts"]);
 
 async function broadcastRefresh(filePath: string) {
+  const changedFile = path.resolve(filePath);
+
   for (const [res, urlPath] of clients) {
     try {
+      const route = resolveRoute(urlPath);
+      if (!route || !fs.existsSync(route.pageFile)) {
+        reload(res, filePath);
+        continue;
+      }
+
+      if (!getPageGraph(route.pageFile).clientFiles.includes(changedFile)) {
+        reload(res, filePath);
+        continue;
+      }
+
       const code = await buildClientScriptForUrl(urlPath);
       if (code) send(res, { type: "refresh", code });
       else reload(res, filePath);

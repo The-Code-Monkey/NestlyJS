@@ -21,7 +21,7 @@ See [docs/ROADMAP.md](./docs/ROADMAP.md) for the current scope and deferred feat
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 22.22 or newer
 - pnpm 12 or newer
 - React 19 and React DOM 19 as peer dependencies
 
@@ -111,7 +111,7 @@ npx nestly build
 npx nestly start --port=3000
 ```
 
-`nestly start` reads `.nestly/manifest.json`, so run `nestly build` first.
+`nestly start` reads `.nestly/manifest.json`, so run `nestly build` first. Without a build it exits instead of starting workers.
 
 Production page HTML is cached in memory. Set `NESTLY_HTML_CACHE_SIZE` to change the limit (default 100, `0` disables). Both servers accept `--host` or `HOST`. SIGTERM/SIGINT trigger graceful shutdown.
 
@@ -157,7 +157,7 @@ pnpm --filter test-app test:routes
 
 ## Releases
 
-Releases use Changesets. Merging to `main` opens a version PR; merging that PR publishes `@nestlyjs/server` when `NPM_TOKEN` is configured in GitHub Actions.
+Releases use Changesets. Merging to `main` opens a version PR; merging that PR publishes `@nestlyjs/server` over OIDC trusted publishing.
 
 ```sh
 pnpm exec changeset
@@ -168,7 +168,8 @@ node scripts/check-install.mjs
 ## Documentation
 
 - [Roadmap](./docs/ROADMAP.md)
-- [Glossary](./GLOSSARY.md)
+- [Glossary](./packages/server/GLOSSARY.md)
+- [Glossary map](./GLOSSARY-MAP.md)
 - [Architecture decisions](./docs/adr/)
 - [Agent guide](./AGENTS.md)
 

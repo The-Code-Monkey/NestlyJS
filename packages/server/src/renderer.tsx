@@ -1,6 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { clientIdFor, isClientComponent } from "./pageGraph";
+import { clientInstanceKey, hydrationRootId } from "./pageDocument";
 
 export interface ClientInstance {
   id: string;
@@ -47,7 +48,7 @@ export async function renderAndWrap(
     (filePath && isClientComponent(filePath) ? clientIdFor(filePath) : null);
 
   if (typeof type === "function" && clientId) {
-    const instanceKey = `${clientId.replace(/\//g, "-")}-${counter.value++}`;
+    const instanceKey = clientInstanceKey(clientId, counter.value++);
 
     instances.push({
       id: clientId,
@@ -59,7 +60,7 @@ export async function renderAndWrap(
       "div",
       {
         key: element.key,
-        id: `hydrate-${instanceKey}`,
+        id: hydrationRootId(instanceKey),
         "data-client-component": instanceKey,
         suppressHydrationWarning: true,
       },

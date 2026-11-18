@@ -101,7 +101,9 @@ describe("devAPIHandler", () => {
       url,
       headers: undefined,
       body: { ok: true },
+      bodyError: undefined,
       params: { slug: "hello" },
+      requestId: expect.any(String),
     });
 
     child.handlers.message({
@@ -184,7 +186,95 @@ describe("devAPIHandler", () => {
     expect(child.send).toHaveBeenCalledTimes(2);
   });
 
-  it("returns a body parsing error", async () => {
+  it("correlates concurrent replies by request id", async () => {
+    const url = nextUrl();
+    m.readBody
+      .mockResolvedValueOnce("first")
+      .mockResolvedValueOnce("second");
+    const first = response();
+    const second = response();
+
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      first as any,
+      request(url)
+    );
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      second as any,
+      request(url)
+    );
+
+    const child = m.children[0];
+    const [firstMessage, secondMessage] = child.send.mock.calls.map(
+      (call: any[]) => call[0]
+    );
+
+    child.handlers.message({
+      type: "apiResponse",
+      status: 200,
+      body: "second",
+      requestId: secondMessage.requestId,
+    });
+
+    expect(second.end).toHaveBeenCalledWith('"second"');
+    expect(first.end).not.toHaveBeenCalled();
+
+    child.handlers.message({
+      type: "apiResponse",
+      status: 200,
+      body: "first",
+      requestId: firstMessage.requestId,
+    });
+
+    expect(first.end).toHaveBeenCalledWith('"first"');
+  });
+
+  it("keeps a body error separate from a valid request", async () => {
+    const url = nextUrl();
+    m.readBody
+      .mockRejectedValueOnce(new RequestBodyError(400, "Invalid JSON"))
+      .mockResolvedValueOnce({ ok: true });
+    const invalid = response();
+    const valid = response();
+
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      invalid as any,
+      request(url)
+    );
+    await devAPIHandler(
+      { url, method: "POST" } as any,
+      valid as any,
+      request(url)
+    );
+
+    const child = m.children[0];
+    const [invalidMessage, validMessage] = child.send.mock.calls.map(
+      (call: any[]) => call[0]
+    );
+
+    child.handlers.message({
+      type: "apiResponse",
+      status: 400,
+      body: { error: "Invalid JSON" },
+      requestId: invalidMessage.requestId,
+    });
+
+    expect(invalid.end).toHaveBeenCalledWith('{"error":"Invalid JSON"}');
+    expect(valid.end).not.toHaveBeenCalled();
+
+    child.handlers.message({
+      type: "apiResponse",
+      status: 200,
+      body: { ok: true },
+      requestId: validMessage.requestId,
+    });
+
+    expect(valid.end).toHaveBeenCalledWith('{"ok":true}');
+  });
+
+  it("lets the child decide a body parsing error", async () => {
     m.readBody.mockRejectedValue(
       new RequestBodyError(400, "Invalid JSON")
     );
@@ -196,6 +286,20 @@ describe("devAPIHandler", () => {
       res as any,
       request(url)
     );
+
+    expect(m.fork).toHaveBeenCalledTimes(1);
+    const child = m.children[0];
+    expect(child.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bodyError: { status: 400, message: "Invalid JSON" },
+      })
+    );
+
+    child.handlers.message({
+      type: "apiResponse",
+      status: 400,
+      body: { error: "Invalid JSON" },
+    });
 
     expect(res.writeHead).toHaveBeenCalledWith(400, {
       "Content-Type": "application/json",

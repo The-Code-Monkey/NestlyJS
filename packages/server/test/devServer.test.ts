@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
-  state: { isPrimary: true },
+  state: { isPrimary: true, workers: {} as Record<string, any> },
+  send: vi.fn(),
   fork: vi.fn(),
   on: vi.fn(),
+  removeAllListeners: vi.fn(),
+  disconnect: vi.fn((cb?: () => void) => cb?.()),
   createServer: vi.fn(),
   listen: vi.fn((_port: number, _host?: string, cb?: () => void) => cb?.()),
+  close: vi.fn((cb?: () => void) => cb?.()),
+  closeHmr: vi.fn(),
   cpus: vi.fn(() => [{}, {}]),
   resolve: vi.fn(),
   exists: vi.fn(() => true),
@@ -24,6 +29,11 @@ vi.mock("cluster", () => ({
     },
     fork: m.fork,
     on: m.on,
+    get workers() {
+      return m.state.workers;
+    },
+    removeAllListeners: m.removeAllListeners,
+    disconnect: m.disconnect,
   },
 }));
 
@@ -31,7 +41,7 @@ vi.mock("http", () => ({
   default: {
     createServer: (handler: any) => {
       m.createServer(handler);
-      return { listen: m.listen };
+      return { listen: m.listen, close: m.close };
     },
   },
 }));
@@ -40,7 +50,7 @@ vi.mock("os", () => ({ default: { cpus: m.cpus } }));
 vi.mock("fs", () => ({ default: { existsSync: m.exists } }));
 vi.mock("../src/devSSRWorker", () => ({ devSSRHandler: m.ssr }));
 vi.mock("../src/devAPIWorker", () => ({ devAPIHandler: m.api }));
-vi.mock("../src/routeResolver", () => ({ resolveRoute: m.resolve }));
+vi.mock("../src/routeResolver", () => ({ resolveRouteSegments: m.resolve }));
 vi.mock("../src/staticAssets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/staticAssets")>()),
   serveStaticAsset: m.serveStatic,
@@ -50,9 +60,10 @@ vi.mock("../src/hmr", () => ({
   HMR_PATH: "/_nestly/hmr",
   hmrHandler: m.hmrHandler,
   startHmrWatcher: m.startHmr,
+  closeHmrClients: m.closeHmr,
 }));
 
-import { start } from "../src/devServer";
+import { executeDevDecision, start } from "../src/devServer";
 
 type Handler = (req: any, res: any) => Promise<void>;
 
@@ -73,9 +84,12 @@ describe("devServer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     m.state.isPrimary = true;
+    m.state.workers = {};
     m.resolve.mockReturnValue(null);
     m.exists.mockReturnValue(true);
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "once").mockImplementation((() => process) as any);
+    vi.spyOn(process, "exit").mockImplementation((() => undefined) as any);
   });
 
   afterEach(() => {
@@ -91,6 +105,19 @@ describe("devServer", () => {
   it("forks the requested number of workers", () => {
     start({ port: 3000, totalWorkers: 3 });
     expect(m.fork).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores EPIPE worker errors during shutdown", () => {
+    const on = vi.fn();
+    m.fork.mockReturnValueOnce({ on } as any);
+    start({ port: 3000, totalWorkers: 1 });
+
+    const handler = on.mock.calls[0][1];
+    handler({ code: "EPIPE" });
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    handler({ code: "EACCES" });
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   it("restarts a dead worker", () => {
@@ -135,7 +162,7 @@ describe("devServer", () => {
     const res = response();
     await handler(req, res);
 
-    expect(m.serveClient).toHaveBeenCalledWith(req, res, "app.js");
+    expect(m.serveClient).toHaveBeenCalledWith(req, res, ["app.js"]);
     expect(m.resolve).not.toHaveBeenCalled();
   });
 
@@ -148,7 +175,7 @@ describe("devServer", () => {
     const res = response();
     await handler(req, res);
 
-    expect(m.serveStatic).toHaveBeenCalledWith(req, res, "/logo.png");
+    expect(m.serveStatic).toHaveBeenCalledWith(req, res, ["logo.png"]);
     expect(m.ssr).not.toHaveBeenCalled();
   });
 
@@ -210,6 +237,164 @@ describe("devServer", () => {
 
     expect(res.writeHead).toHaveBeenCalledWith(404);
     expect(res.end).toHaveBeenCalledWith("API route not found");
+  });
+
+  it("starts worker cleanup before disconnecting and exits 0", () => {
+    vi.useFakeTimers();
+    let disconnected: (() => void) | undefined;
+    m.state.workers = { 1: { send: m.send } };
+    m.disconnect.mockImplementationOnce((cb?: () => void) => {
+      disconnected = cb;
+    });
+
+    start({ port: 3000, totalWorkers: 1 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
+    shutdown();
+
+    expect(m.removeAllListeners).toHaveBeenCalledWith("exit");
+    expect(m.send).toHaveBeenCalledTimes(1);
+    expect(m.send).toHaveBeenCalledWith({ type: "shutdown" });
+    expect(m.disconnect).toHaveBeenCalledTimes(1);
+    expect(m.send.mock.invocationCallOrder[0]).toBeLessThan(
+      m.disconnect.mock.invocationCallOrder[0]
+    );
+    expect(process.exit).not.toHaveBeenCalled();
+
+    disconnected?.();
+    expect(process.exit).toHaveBeenCalledWith(0);
+
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("exits 1 when the primary disconnect does not finish", () => {
+    vi.useFakeTimers();
+    m.disconnect.mockImplementationOnce(() => {});
+
+    start({ port: 3000, totalWorkers: 1 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
+    shutdown();
+    vi.advanceTimersByTime(5000);
+
+    expect(process.exit).toHaveBeenCalledTimes(1);
+    expect(process.exit).toHaveBeenCalledWith(1);
+
+    vi.useRealTimers();
+  });
+
+  it("starts worker cleanup from a shutdown message", () => {
+    vi.useFakeTimers();
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+    const onMessage = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "message"
+    )[1];
+
+    onMessage({ type: "shutdown" });
+
+    expect(m.closeHmr).toHaveBeenCalledTimes(1);
+    expect(m.close).toHaveBeenCalledTimes(1);
+    expect(process.exit).toHaveBeenCalledWith(0);
+
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("closes the worker server and exits 0", () => {
+    vi.useFakeTimers();
+    let closed: (() => void) | undefined;
+    m.close.mockImplementationOnce((cb?: () => void) => {
+      closed = cb;
+    });
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
+    shutdown();
+
+    expect(m.closeHmr).toHaveBeenCalledTimes(1);
+    expect(m.close).toHaveBeenCalledTimes(1);
+    expect(process.exit).not.toHaveBeenCalled();
+
+    closed?.();
+    expect(process.exit).toHaveBeenCalledWith(0);
+
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("exits 1 when the worker close does not finish", () => {
+    vi.useFakeTimers();
+    m.close.mockImplementationOnce(() => {});
+    m.state.isPrimary = false;
+    start({ port: 3000 });
+    const shutdown = (process.once as any).mock.calls.find(
+      (call: any[]) => call[0] === "SIGTERM"
+    )[1];
+
+    shutdown();
+    vi.advanceTimersByTime(5000);
+
+    expect(process.exit).toHaveBeenCalledTimes(1);
+    expect(process.exit).toHaveBeenCalledWith(1);
+
+    vi.useRealTimers();
+  });
+
+  it("executes a supplied page decision without resolving the route", async () => {
+    const res = response();
+
+    await executeDevDecision(
+      { url: "/blog/hello?x=1", method: "GET" } as any,
+      res as any,
+      {
+        kind: "page",
+        url: "/blog/hello?x=1",
+        path: "/blog/hello",
+        segments: ["blog", "hello"],
+        method: "GET",
+        route,
+        params: { slug: "hello" },
+      }
+    );
+
+    expect(m.ssr).toHaveBeenCalledWith(
+      expect.anything(),
+      res,
+      {
+        pageFile: "/tmp/page.tsx",
+        url: "/blog/hello?x=1",
+        params: { slug: "hello" },
+      }
+    );
+    expect(m.resolve).not.toHaveBeenCalled();
+  });
+
+  it("executes a supplied static decision from decoded segments", () => {
+    const req = { url: "/logo.png", method: "GET" };
+    const res = response();
+
+    void executeDevDecision(req as any, res as any, {
+      kind: "staticAsset",
+      url: "/logo.png",
+      path: "/logo.png",
+      segments: ["logo.png"],
+      method: "GET",
+    });
+
+    expect(m.serveStatic).toHaveBeenCalledWith(req, res, ["logo.png"]);
+    expect(m.resolve).not.toHaveBeenCalled();
   });
 
   it("returns 500 when a handler throws", async () => {

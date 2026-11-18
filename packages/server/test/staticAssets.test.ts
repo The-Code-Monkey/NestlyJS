@@ -53,7 +53,7 @@ function response() {
   };
 }
 
-async function serve(urlPath: string, method = "GET") {
+async function serve(urlPath: string | string[], method = "GET") {
   const res = streamResponse();
   serveStaticAsset({ method } as any, res, urlPath);
   await finished(res);
@@ -92,6 +92,17 @@ describe("serveStaticAsset", () => {
     expect(res.body()).toBe("hello static");
   });
 
+  it("serves decoded segments directly", async () => {
+    write("public/hello.txt", "hello");
+    const res = await serve(["hello.txt"]);
+
+    expect(res.writeHead).toHaveBeenCalledWith(
+      200,
+      expect.objectContaining({ "Content-Type": "text/plain; charset=utf-8" })
+    );
+    expect(res.body()).toBe("hello");
+  });
+
   it("ignores query strings and fragments", async () => {
     write("public/hello.txt", "hello");
     const res = await serve("/hello.txt?x=1");
@@ -118,6 +129,13 @@ describe("serveStaticAsset", () => {
       expect.objectContaining({ "Content-Length": 5 })
     );
     expect(res.body()).toBe("");
+  });
+
+  it("falls back to GET when the method is missing", () => {
+    const res = response();
+    serveStaticAsset({} as any, res as any, "/missing.txt");
+    expect(res.writeHead).toHaveBeenCalledWith(404);
+    expect(res.end).toHaveBeenCalledWith("Not found");
   });
 
   it("returns 404 for a missing file", () => {
@@ -208,6 +226,20 @@ describe("serveStaticAsset", () => {
     );
     const res = await serve("/alias.txt");
     expect(res.body()).toBe("real");
+  });
+
+  it("serves client assets from decoded segments", async () => {
+    write(".nestly/client/app-abc123.js", "console.log('app')");
+    const res = streamResponse();
+    serveClientAsset({ method: "GET" } as any, res as any, ["app-abc123.js"]);
+    await finished(res);
+
+    expect(res.writeHead).toHaveBeenCalledWith(
+      200,
+      expect.objectContaining({
+        "Content-Type": "text/javascript; charset=utf-8",
+      })
+    );
   });
 
   it("serves built client assets with immutable caching", async () => {

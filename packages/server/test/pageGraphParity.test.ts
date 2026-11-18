@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import { buildApp } from "../src/build";
+import { getPageGraph } from "../src/pageGraph";
 
 let root: string;
 const originalCwd = process.cwd();
@@ -25,8 +26,8 @@ function write(relative: string, contents = "") {
 
 describe("page graph parity", () => {
   it("build and the dev child agree on client files and CSS", async () => {
-    write("routes/global.css", "body { color: black; }");
-    write("routes/button.css", "button { color: red; }");
+    const globalCss = write("routes/global.css", "body { color: black; }");
+    const buttonCss = write("routes/button.css", "button { color: red; }");
     write(
       "routes/layout.tsx",
       `import "./global.css";
@@ -34,7 +35,7 @@ export default function Layout({ children }: any) {
   return <html><head></head><body>{children}</body></html>;
 }`
     );
-    write(
+    const button = write(
       "routes/button.tsx",
       `"use client";
 import "./button.css";
@@ -58,6 +59,10 @@ export default function Page() { return <Button />; }`
       path.join(root, ".nestly", "client", scriptFile),
       "utf8"
     );
+
+    const graph = getPageGraph(pageFile);
+    expect(graph.clientFiles).toEqual([button]);
+    expect(graph.cssFiles).toEqual([globalCss, buttonCss]);
 
     vi.resetModules();
     const devChild = await import("../src/devChildWorker");

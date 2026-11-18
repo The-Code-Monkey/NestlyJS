@@ -25,6 +25,14 @@ export function serializeProps(props: any) {
   return JSON.stringify(props || {}).replace(/</g, "\\u003c");
 }
 
+export function clientInstanceKey(clientId: string, index: number) {
+  return `${clientId.replace(/\//g, "-")}-${index}`;
+}
+
+export function hydrationRootId(instanceKey: string) {
+  return `hydrate-${instanceKey}`;
+}
+
 function hydrationScript(instances: ClientInstance[]) {
   return `
       <script>
@@ -32,13 +40,13 @@ function hydrationScript(instances: ClientInstance[]) {
         const instances = ${serializeProps(
           instances.map(({ id, instanceKey, props }) => ({
             id,
-            key: instanceKey,
+            rootId: hydrationRootId(instanceKey),
             props,
           }))
         )};
         document.addEventListener("DOMContentLoaded", () => {
-          for (const { id, key, props } of instances) {
-            const el = document.getElementById("hydrate-" + key);
+          for (const { id, rootId, props } of instances) {
+            const el = document.getElementById(rootId);
             const Comp = window.__components[id]?.default;
             if (el && Comp) {
               window.ReactDOMClient.hydrateRoot(el, window.React.createElement(Comp, props));

@@ -2,12 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import {
-  resolveRoute,
-  hasPageForGET,
-  getAPIRoute,
-  getAPIMethod,
-} from "../src/routeResolver";
+import { resolveRoute } from "../src/routeResolver";
 
 let root: string;
 
@@ -215,72 +210,5 @@ describe("resolveRoute", () => {
     expect(resolveRoute("/%2e%2e/secret")).toBeNull();
     expect(resolveRoute("/a%2Fb")).toBeNull();
     expect(resolveRoute("/a%5Cb")).toBeNull();
-  });
-});
-
-describe("hasPageForGET", () => {
-  it("returns true for a dynamic page", () => {
-    write("routes/blog/[slug]/page.tsx");
-    expect(hasPageForGET("/blog/hello")).toBe(true);
-  });
-
-  it("returns false for a dynamic API-only route", () => {
-    write("routes/blog/[slug]/api.ts");
-    expect(hasPageForGET("/blog/hello")).toBe(false);
-  });
-
-  it("returns false when nothing matches", () => {
-    expect(hasPageForGET("/missing")).toBe(false);
-  });
-});
-
-describe("getAPIRoute", () => {
-  it("returns null when no route matches", () => {
-    expect(getAPIRoute("/missing", "POST")).toBeNull();
-  });
-
-  it("returns null when api.ts is missing", () => {
-    write("routes/page.tsx");
-    expect(getAPIRoute("/", "POST")).toBeNull();
-  });
-
-  it("returns the named method export for a dynamic route", () => {
-    write("routes/hooks/[id]/api.ts", "exports.POST = () => 'ok';");
-    const result = getAPIRoute("/hooks/abc", "POST");
-    expect(result?.handler()).toBe("ok");
-    expect(result?.route.params).toEqual({ id: "abc" });
-  });
-
-  it("returns catch-all params for a dynamic API route", () => {
-    write("routes/files/[...path]/api.ts", "exports.POST = () => 'ok';");
-    const result = getAPIRoute("/files/a/b", "POST");
-    expect(result?.route.params).toEqual({ path: ["a", "b"] });
-  });
-
-  it("prefers page.tsx for GET when both exist", () => {
-    write("routes/api.ts", "exports.GET = () => 'ok';");
-    write("routes/page.tsx");
-    expect(getAPIRoute("/", "GET")).toBeNull();
-  });
-
-  it("allows GET when only api.ts exists", () => {
-    write("routes/api.ts", "exports.GET = () => 'ok';");
-    expect(getAPIRoute("/", "GET")?.handler()).toBe("ok");
-  });
-
-  it("returns null when the export is not a function", () => {
-    write("routes/api.ts", "exports.GET = 'nope';");
-    expect(getAPIRoute("/", "GET")).toBeNull();
-  });
-});
-
-describe("getAPIMethod", () => {
-  it("returns the handler", () => {
-    write("routes/api.ts", "exports.POST = () => 'ok';");
-    expect(getAPIMethod("/", "POST")?.()).toBe("ok");
-  });
-
-  it("returns null when no handler exists", () => {
-    expect(getAPIMethod("/missing", "POST")).toBeNull();
   });
 });

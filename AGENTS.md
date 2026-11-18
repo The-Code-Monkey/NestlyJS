@@ -11,7 +11,7 @@ The repository is a pnpm workspace monorepo:
 - `packages/server` — publishable `@nestlyjs/server` package and `nestly` CLI.
 - `packages/test-app` — private integration fixture used by CI.
 
-The project is early-stage. The development server is the only functional runtime path. Do not describe or treat it as production-ready.
+The project is early-stage. The development server and the production server are both functional. Do not describe or treat either as production-ready.
 
 ## Current state
 
@@ -42,11 +42,12 @@ Working:
 
 - `src/bin/nestly.ts` — CLI entry. `dev` calls `devServer.start`; `build` calls `buildApp`; `start` calls `prodServer.start`. Supports `--port` for dev and start.
 - `src/devServer.ts` — primary process forks one worker per CPU core. Each worker asks the Request Pipeline to decide between client asset, static asset, Page, API route, and not found. Dead workers restart automatically.
+- `src/requestPath.ts` — owns URL path policy: strips query and fragment, decodes segments once, rejects traversal and malformed encodings, and classifies client and static assets.
 - `src/staticAssets.ts` — streams files from `process.cwd()/public` and `.nestly/client`, maps extensions to content types, and rejects traversal and symlink escapes.
 - `src/routeResolver.ts` — maps URL paths to `process.cwd()/routes/<path>/page.tsx` and `api.ts`. Supports `[param]`, `[...param]`, `[[...param]]`, and `(group)` directories. Precedence: static, dynamic, catch-all, optional catch-all. Groups consume no URL segment. A GET prefers `page.tsx` over `api.ts`.
 - `src/requestPipeline.ts` — turns a URL and method into one decision: client asset, static asset, Page, API route, or not found, with params and route identity. Dev and production executors consume the decision instead of resolving again.
 - `src/devSSRWorker.ts` — forks one child per URL path through `supervisedChild`, passes route params, registers `ts-node/register`, watches all of `routes/`, and kills page children on any route change.
-- `src/renderer.tsx` — shared SSR helpers: element walking, client wrapping, and rendered-page output.
+- `src/renderer.tsx` — shared SSR helpers: element walking and client wrapping. Page Document owns document assembly and hydration markup.
 - `src/pageDocument.ts` — pure Page Document assembly: head and body injection order plus hydration markup. Dev and production adapters supply different asset plans.
 - `src/devChildWorker.tsx` — renders the page with route params, caches HTML, JavaScript, and CSS per child, and supplies the development asset plan.
 - `src/hmr.ts` — dev SSE endpoint, file watcher, live reload, CSS hot-swap, and Fast Refresh payloads.
@@ -100,7 +101,7 @@ pnpm exec changeset
 ## Known gaps and warnings
 
 - Unit tests cover `packages/server/src` at 100% lines, statements, and functions. Branch coverage is 95%; `requestBody.ts` is the thinnest at 80%.
-- Fast Refresh applies to client components. Page, layout, API, and public asset changes still reload. State resets when hook order changes.
+- Fast Refresh applies to client components. Page, layout, API, public asset, and other non-client route file changes still reload. State resets when hook order changes.
 - Layout discovery walks from the page directory up to `process.cwd()/routes`. A page outside that root renders with no layouts instead of failing.
 - Worker failures are surfaced as generic 500 responses. Custom 404/500 pages are not implemented and 404 bodies are plain text.
 - The package has no `main`, `types`, or `exports` field. It is CLI-only and reserves no public library API.

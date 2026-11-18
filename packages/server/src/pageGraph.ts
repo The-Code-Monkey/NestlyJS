@@ -31,8 +31,10 @@ export function clientIdFor(filePath: string) {
 export function getImports(filePath: string): string[] {
   try {
     const src = fs.readFileSync(filePath, "utf8");
+    // Keep the import clause on its own statement: a side-effect import must
+    // not be swallowed by the `... from` of the next import.
     const importRegex =
-      /import\s+(?:[\s\S]+?\s+from\s+)?['"]([^'"]+)['"]/g;
+      /import\s+(?:(?:[\w$\s{},]|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*?\s+from\s+)?['"]([^'"]+)['"]/g;
     const imports: string[] = [];
     let match;
     while ((match = importRegex.exec(src))) {

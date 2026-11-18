@@ -23,7 +23,9 @@ routes/
     [slug]/
       page.tsx
       api.ts
-  public/
+
+public/
+  logo.png
 ```
 
 - Pages and layouts use default exports.
@@ -44,7 +46,7 @@ nestly start [--port=3000]
 
 - `dev` starts the clustered development server with live reload, CSS hot swap, and React Fast Refresh.
 - `build` writes the production output to `.nestly/`.
-- `start` serves the production build and requires a prior build. Set `NESTLY_HTML_CACHE_SIZE` to change the page HTML cache size (`0` disables).
+- `start` serves the production build, requires a prior build, and exits with an error when `.nestly/manifest.json` is missing. Set `NESTLY_HTML_CACHE_SIZE` to change the page HTML cache size (`0` disables).
 
 Static files live in `public/` and are served by extension-addressed paths.
 

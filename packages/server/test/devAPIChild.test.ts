@@ -48,6 +48,27 @@ describe("handleApiMessage", () => {
       type: "apiResponse",
       status: 201,
       body: { ok: true },
+      requestId: undefined,
+    });
+  });
+
+  it("echoes the request id", async () => {
+    const file = writeApi(
+      "echo-id",
+      `export async function GET() { return { status: 200, body: "ok" }; }`
+    );
+    const send = vi.fn();
+
+    await handleApiMessage(
+      { file, method: "GET", url: "/", requestId: "request-1" },
+      send
+    );
+
+    expect(send).toHaveBeenCalledWith({
+      type: "apiResponse",
+      status: 200,
+      body: "ok",
+      requestId: "request-1",
     });
   });
 
@@ -69,6 +90,7 @@ describe("handleApiMessage", () => {
       type: "apiResponse",
       status: 200,
       body: { slug: "hello" },
+      requestId: undefined,
     });
   });
 
@@ -85,6 +107,7 @@ describe("handleApiMessage", () => {
       type: "apiResponse",
       status: 200,
       body: "ok",
+      requestId: undefined,
     });
   });
 
@@ -94,8 +117,56 @@ describe("handleApiMessage", () => {
 
     await handleApiMessage({ file, method: "POST", url: "/" }, send);
 
-    expect(send).toHaveBeenCalledWith({ type: "apiNotFound" });
+    expect(send).toHaveBeenCalledWith({
+      type: "apiNotFound",
+      requestId: undefined,
+    });
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("prefers a missing method over a body parsing error", async () => {
+    const file = writeApi("missing-with-bad-body", `export const GET = 1;`);
+    const send = vi.fn();
+
+    await handleApiMessage(
+      {
+        file,
+        method: "POST",
+        url: "/",
+        bodyError: { status: 400, message: "Invalid JSON" },
+      },
+      send
+    );
+
+    expect(send).toHaveBeenCalledWith({
+      type: "apiNotFound",
+      requestId: undefined,
+    });
+  });
+
+  it("returns a body parsing error for an existing method", async () => {
+    const file = writeApi(
+      "bad-body",
+      `export async function POST() { return { status: 200, body: "ok" }; }`
+    );
+    const send = vi.fn();
+
+    await handleApiMessage(
+      {
+        file,
+        method: "POST",
+        url: "/",
+        bodyError: { status: 400, message: "Invalid JSON" },
+      },
+      send
+    );
+
+    expect(send).toHaveBeenCalledWith({
+      type: "apiResponse",
+      status: 400,
+      body: { error: "Invalid JSON" },
+      requestId: undefined,
+    });
   });
 
   it("reports not found when the export is not a function", async () => {
@@ -104,7 +175,10 @@ describe("handleApiMessage", () => {
 
     await handleApiMessage({ file, method: "GET", url: "/" }, send);
 
-    expect(send).toHaveBeenCalledWith({ type: "apiNotFound" });
+    expect(send).toHaveBeenCalledWith({
+      type: "apiNotFound",
+      requestId: undefined,
+    });
   });
 
   it("returns 500 when the handler returns nothing", async () => {
