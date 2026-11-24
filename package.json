@@ -30,5 +30,5 @@
     "test:watch": "vitest",
     "check:install": "node scripts/check-install.mjs"
   },
-  "packageManager": "pnpm@12.21.0"
+  "packageManager": "pnpm@12.23.0"
 }
